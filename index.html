@@ -598,14 +598,7 @@
         }
 
         @media (max-width: 768px) {
-            /* Prevent the parent containers from clipping content or extending outward */
-            html, body {
-                width: 100%;
-                max-width: 100vw;
-                overflow-x: hidden;
-            }
-
-            /* 1. Stack the header layout vertically */
+            /* 1. Reset header to stack elements vertically */
             header { 
                 padding: 0.75rem 1rem !important; 
                 width: 100% !important;
@@ -616,55 +609,35 @@
 
             header nav {
                 display: flex !important;
-                flex-direction: column !important; /* Stacks logo on top, tabs on bottom */
+                flex-direction: column !important; /* Puts the title on top and links below */
                 align-items: center !important;
-                gap: 12px !important;
+                gap: 10px !important;
                 width: 100% !important;
             }
 
-            /* Center the branding text */
             header .logo {
+                font-size: 1.25rem !important; /* Slightly smaller logo text for mobile screens */
                 text-align: center !important;
-                margin: 0 auto !important;
+                margin-bottom: 2px !important;
             }
 
-            /* 2. Give the tabs full width to display side-by-side without overflowing */
+            /* 2. Format the links container to span full width evenly */
             .nav-links {
                 display: flex !important;
-                justify-content: space-between !important; /* Distributes space perfectly */
-                align-items: center !important;
-                width: 100% !important; /* Spans the full width of the mobile screen */
-                gap: 8px !important; 
-                flex-wrap: nowrap !important; /* Prevents text from dropping to another row */
+                width: 100% !important; /* Takes up the entire width of the phone screen */
+                justify-content: space-between !important; /* Spreads the three choices evenly */
+                gap: 6px !important; /* Small space between tabs */
+                flex-wrap: nowrap !important; /* Strict rule: never break into a second row */
+                padding: 0 !important;
             }
 
-            /* 3. Style links to fit evenly across the screen row */
+            /* 3. Scale buttons down to fit perfectly side-by-side */
             .nav-link {
-                flex: 1 !important; /* Forces all 3 tabs to take up an identical amount of space */
+                flex: 1 !important; /* Forces all 3 tabs to be the exact same width */
                 text-align: center !important;
-                font-size: 0.85rem !important; /* Optimized readability for small screens */
-                padding: 8px 4px !important; 
-                white-space: nowrap !important; /* Hard-locks "Knockout Bracket" on one line */
-            }
-
-            /* --- General layout restrictions to hold everything centered --- */
-            main {
-                width: 100% !important;
-                max-width: 100% !important;
-                padding: 12px !important;
-                box-sizing: border-box;
-                overflow-x: hidden;
-            }
-
-            .groups-grid, .matches-container {
-                grid-template-columns: 1fr !important;
-                width: 100% !important;
-            }
-
-            .table-responsive {
-                width: 100% !important;
-                overflow-x: auto !important;
-                -webkit-overflow-scrolling: touch;
+                font-size: 0.8rem !important; /* Reduced text size to guarantee fit */
+                padding: 8px 2px !important; /* Compact padding */
+                white-space: nowrap !important; /* Stops long words like "Knockout" from wrapping inside the button */
             }
         }
     
