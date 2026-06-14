@@ -598,17 +598,8 @@
         }
 
         @media (max-width: 768px) {
-            /* --- 1. VIEWPORT LOCK --- */
-            html, body {
-                width: 100%;
-                max-width: 100vw;
-                overflow-x: hidden;
-                position: relative;
-                margin: 0;
-                padding: 0;
-            }
+            /* Keep your html, body, and main stretch rules from before! */
 
-            /* --- 2. HEADER & 2x2 MENU GRID --- */
             header { 
                 padding: 1rem !important; 
                 width: 100% !important;
@@ -619,86 +610,68 @@
 
             header nav {
                 display: flex !important;
-                flex-direction: column !important;
+                flex-direction: column !important; /* Keeps the Logo centered on top */
                 align-items: center !important;
-                gap: 16px !important;
+                gap: 16px !important; /* Space between logo and the grid */
                 width: 100% !important;
             }
 
+            /* THE NEW 2x2 GRID */
             .nav-links {
                 display: grid !important;
-                grid-template-columns: 1fr 1fr !important;
-                grid-template-rows: auto auto !important;
-                gap: 10px !important;
+                grid-template-columns: 1fr 1fr !important; /* Creates 2 equal-width columns */
+                grid-template-rows: auto auto !important; /* Creates 2 rows */
+                gap: 10px !important; /* Space between the grid buttons */
                 width: 100% !important;
                 padding: 0 !important;
             }
 
+            /* BUTTON STYLING FOR THE GRID */
             .nav-link {
                 display: flex !important;
                 justify-content: center !important;
                 align-items: center !important;
                 text-align: center !important;
-                font-size: 0.9rem !important;
-                padding: 14px 8px !important;
+                font-size: 0.9rem !important; /* Slightly larger, easier to read */
+                padding: 14px 8px !important; /* Taller padding makes it feel like an app button */
                 width: 100% !important;
                 box-sizing: border-box !important;
-                height: 100% !important;
-                white-space: normal !important;
+                height: 100% !important; /* Makes sure adjacent buttons match height perfectly */
+                white-space: normal !important; /* Allows "Knockout Bracket" to stack to two lines neatly inside its box */
             }
 
-            /* --- 3. AGGRESSIVE FULL WIDTH STRETCH FOR CONTENT --- */
             main {
-                padding: 10px 4px !important; /* Just 4px of breathing room on the edge */
+                padding: 12px 8px !important; /* Just 8px on the sides so it doesn't touch the exact pixel edge */
                 width: 100% !important;
                 max-width: 100vw !important;
-                margin: 0 !important;
                 box-sizing: border-box !important;
-                overflow-x: hidden !important;
             }
 
-            /* Force the Section Tabs and Grid Containers to 100% width */
-            section.tab-content,
-            #groups-container,
-            #matches-container,
-            .groups-grid,
-            .matches-list {
+            /* 2. Force all structural containers to span 100% width */
+            .container, 
+            .matches-section, 
+            .groups-grid {
                 width: 100% !important;
                 max-width: 100% !important;
                 margin: 0 !important;
                 padding: 0 !important;
-                display: grid !important;
-                grid-template-columns: 1fr !important; /* Strict single column */
-                gap: 12px !important;
                 box-sizing: border-box !important;
             }
 
-            /* Stretch all Cards, Menus, and the Sync box edge-to-edge */
-            .group-card, 
-            .match-card,
-            .schedule-controls,
-            .score-editor-bar,
-            .sync-container {
+            /* 3. Stretch the Date headers and Group cards */
+            .date-section, 
+            .group-card {
                 width: 100% !important;
-                max-width: 100% !important;
                 margin-left: 0 !important;
                 margin-right: 0 !important;
                 box-sizing: border-box !important;
-                border-radius: 6px !important;
             }
 
-            /* Ensure tables stretch fully inside the cards */
-            .table-responsive {
+            /* 4. Stretch the individual Match cards */
+            .match-card {
                 width: 100% !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                overflow-x: auto !important;
-                -webkit-overflow-scrolling: touch;
-            }
-            
-            table {
-                width: 100% !important;
-                min-width: 100% !important; 
+                margin: 0 0 12px 0 !important; /* Keep bottom margin for spacing, remove side margins */
+                box-sizing: border-box !important;
             }
         }
     
