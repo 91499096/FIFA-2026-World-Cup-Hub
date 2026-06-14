@@ -684,6 +684,15 @@
                 box-sizing: border-box !important;
             }
 
+            /* .groups-grid normally uses minmax(400px, 1fr) columns, which
+               is wider than most phone screens and causes the whole page
+               to overflow horizontally — that overflow is what was
+               throwing off the header/sync-card alignment on this tab.
+               Stack to a single column on mobile instead. */
+            .groups-grid {
+                grid-template-columns: 1fr !important;
+            }
+
             /* 3. Stretch the Date headers and Group cards */
             .date-section, 
             .group-card {
