@@ -1002,6 +1002,7 @@
                 <span class="save-status" id="save-status"><i class="fa-solid fa-circle-check"></i> Saved!</span>
                 <button class="reset-btn" onclick="resetScores()"><i class="fa-solid fa-rotate-left"></i> Reset All</button>
                 <button class="save-btn" onclick="saveScores()"><i class="fa-solid fa-floppy-disk"></i> Save Scores</button>
+                <button class="reset-btn" onclick="randomizeGroupStage()" style="background:#7c3aed;"><i class="fa-solid fa-dice"></i> Randomize Group Stage (Test)</button>
             </div>
             <div class="matches-list" id="matches-container"></div>
         </section>
@@ -1333,7 +1334,8 @@
                         <thead><tr>
                             <th>Team</th>
                             <th class="text-center">W</th><th class="text-center">D</th>
-                            <th class="text-center">L</th><th class="text-center">GD</th>
+                            <th class="text-center">L</th><th class="text-center">GF</th>
+                            <th class="text-center">GD</th>
                             <th class="text-center">Pts</th>
                         </tr></thead><tbody>`;
                 sorted.forEach(t => {
@@ -1342,6 +1344,7 @@
                         <td class="text-center">${t.w}</td>
                         <td class="text-center">${t.d}</td>
                         <td class="text-center">${t.l}</td>
+                        <td class="text-center">${t.gf}</td>
                         <td class="text-center font-bold">${t.gd > 0 ? '+'+t.gd : t.gd}</td>
                         <td class="text-center font-bold" style="color:#22d3ee">${t.pts}</td>
                     </tr>`;
@@ -1489,6 +1492,29 @@
             renderBracket();
         }
 
+        // ── TEST HELPER: fill every group-stage match with random scores ─────────
+        // Lets you exercise standings / "best 8 thirds" / bracket logic without
+        // typing in 72 scores by hand. Only touches matches whose group is a
+        // "Group X" (i.e. ids 1-72) - knockout matches are left alone.
+        // This updates matchesData in memory and re-renders everything, but does
+        // NOT call saveScores() - so it won't touch localStorage or cloud sync
+        // unless you click "Save Scores" afterwards.
+        function randomizeGroupStage() {
+            if (!confirm("Fill every group-stage match with random scores (0-4)?\n\nThis is for testing the standings/bracket logic and won't be saved unless you click 'Save Scores' afterwards.")) return;
+
+            matchesData.forEach(m => {
+                if (m.group && m.group.startsWith("Group")) {
+                    m.scoreHome = Math.floor(Math.random() * 5); // 0-4
+                    m.scoreAway = Math.floor(Math.random() * 5); // 0-4
+                    m.status = "FT";
+                }
+            });
+
+            filterMatches();     // refresh match-card score inputs
+            renderGroupStage();  // refresh group standings tables
+            renderBracket();     // refresh bracket, incl. best-8-thirds assignment
+        }
+
         // ── FILTER BY DATE ────────────────────────────────────────────────────────
         function filterMatches() {
             const dateVal = document.getElementById("date-picker").value;
@@ -1562,6 +1588,79 @@
             return thirds.sort(teamSort).slice(0,8);
         }
 
+        // ══════════════════════════════════════════════════════════════════════════
+        // ROUND-OF-32 "BEST THIRDS" SLOT ASSIGNMENT (FIFA Annex C style)
+        // ══════════════════════════════════════════════════════════════════════════
+        // Each of the 8 "3rd place" slots in the Round of 32 can only be filled by
+        // a 3rd-placed team from a specific set of groups - this is how FIFA avoids
+        // a 1st-place team facing a 3rd-place team from its own group. These sets
+        // come directly from the official fixture labels (see staticLabels above),
+        // e.g. M74_t2 = "3rd A/B/C/D/F" means only a 3rd-place team from Group A, B,
+        // C, D, or F can be placed in that slot.
+        const THIRD_PLACE_SLOTS = [
+            { slot: "M74_t2", eligible: ["A","B","C","D","F"] }, // paired with 1st Group E
+            { slot: "M77_t2", eligible: ["C","D","F","G","H"] }, // paired with 1st Group I
+            { slot: "M81_t2", eligible: ["B","E","F","I","J"] }, // paired with 1st Group D
+            { slot: "M82_t2", eligible: ["A","E","H","I","J"] }, // paired with 1st Group G
+            { slot: "M79_t2", eligible: ["C","E","F","H","I"] }, // paired with 1st Group A
+            { slot: "M80_t2", eligible: ["E","H","I","J","K"] }, // paired with 1st Group L
+            { slot: "M85_t2", eligible: ["E","F","G","I","J"] }, // paired with 1st Group B
+            { slot: "M87_t2", eligible: ["D","E","I","J","L"] }, // paired with 1st Group K
+        ];
+
+        // "Group A" -> "A"
+        function groupLetter(groupName) {
+            return groupName.replace("Group ", "").trim();
+        }
+
+        // Assigns the qualified "best 8 of 12" third-place teams to the 8 R32
+        // third-place slots so that every team lands only in a slot whose eligible
+        // group list includes its own group (i.e. nobody can be drawn against an
+        // opponent from their own group in the Round of 32). With only 8
+        // slots/teams, a simple backtracking search is effectively instant.
+        //
+        // NOTE: FIFA's official Annex C table specifies one exact mapping for each
+        // of the 495 possible "which 8 of 12 groups qualified" combinations. If a
+        // combination happens to allow more than one valid no-self-group mapping,
+        // this function may pick a different (but still rule-legal) one than the
+        // official table. If you have FIFA's published Annex C table, replace this
+        // with a direct lookup for a guaranteed exact match.
+        function assignThirdPlaceSlots(best3rds) {
+            const result = {};
+            THIRD_PLACE_SLOTS.forEach(s => { result[s.slot] = null; });
+
+            const teams = best3rds.map(t => ({ name: t.name, letter: groupLetter(t.group) }));
+            const used = new Array(teams.length).fill(false);
+            const assignment = new Array(THIRD_PLACE_SLOTS.length).fill(-1);
+
+            function backtrack(slotIdx) {
+                if (slotIdx === THIRD_PLACE_SLOTS.length) return true;
+                const { eligible } = THIRD_PLACE_SLOTS[slotIdx];
+                for (let i = 0; i < teams.length; i++) {
+                    if (!used[i] && eligible.includes(teams[i].letter)) {
+                        used[i] = true;
+                        assignment[slotIdx] = i;
+                        if (backtrack(slotIdx + 1)) return true;
+                        used[i] = false;
+                        assignment[slotIdx] = -1;
+                    }
+                }
+                return false;
+            }
+
+            const solved = backtrack(0);
+            THIRD_PLACE_SLOTS.forEach((s, idx) => {
+                if (assignment[idx] !== -1) result[s.slot] = teams[assignment[idx]].name;
+            });
+
+            if (!solved && teams.length === 8) {
+                console.warn("No valid Round of 32 'best thirds' assignment found - " +
+                    "double-check THIRD_PLACE_SLOTS against the official Annex C table.");
+            }
+
+            return result;
+        }
+
         // Static fallback labels for R32 slots
         const staticLabels = {
             "M74_t1":"1st E",  "M74_t2":"3rd A/B/C/D/F",
@@ -1609,8 +1708,7 @@
 
             // ── R32: 3rd place slots (best 8 of 12) ──────────────────────────────
             const best3rds = getBest3rds(rankings);
-            ["M74_t2","M77_t2","M79_t2","M80_t2","M81_t2","M82_t2","M85_t2","M87_t2"]
-                .forEach((s,i)=>{ slots[s] = best3rds[i]?best3rds[i].name:null; });
+            Object.assign(slots, assignThirdPlaceSlots(best3rds));
 
             // ── R16, QF, SF, Final: propagate knockout winners ────────────────────
             const ko = JSON.parse(localStorage.getItem("wc2026_knockout")||"{}");
