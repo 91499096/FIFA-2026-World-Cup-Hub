@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FIFA World Cup 2026™ Hub</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -742,12 +742,10 @@
     overflow: auto;
     padding: 16px 0;
     width: 100%;
-    text-align: center;
 }
 #bracket-scaler {
-    transform-origin: top center;
-    display: inline-block;
-    text-align: left;
+    transform-origin: top left;
+    display: block;
 }
 /* Tree: horizontal flex row of columns */
 .fifa-tree {
@@ -883,7 +881,20 @@
 }
 .third-box .team-slot {
     font-size: 14px;
-    padding: 8px 10Spx;
+    padding: 8px 10px;
+}
+
+/* On mobile, ~30 bracket boxes each running backdrop-filter: blur() inside
+   a transform: scale() container is a known trigger for mobile browsers
+   (especially iOS Safari) to run out of compositing/GPU memory when the
+   user pinch-zooms — which can crash/reload the tab and drop the user back
+   on the default "Group Standings" tab. Drop the blur on mobile and use a
+   solid-ish background instead so the cards stay readable without it. */
+@media (max-width: 768px) {
+    .match-box, .final-box, .third-box {
+        backdrop-filter: none;
+        background: rgba(15, 20, 30, 0.95);
+    }
 }
 </style>
 </head>
@@ -1259,10 +1270,19 @@
         // ── INIT ──────────────────────────────────────────────────────────────────
         document.addEventListener("DOMContentLoaded", () => {
             initTabs();
+            syncKnockoutResults(); // make sure any previously-saved KO scores feed the bracket
             renderGroupStage();
             renderBracket();
             scaleBracket();
-            window.addEventListener('resize', scaleBracket);
+
+            // Debounced resize handler — pinch-zoom on mobile can fire many
+            // rapid resize events; recalculating the bracket scale on every
+            // single one is unnecessary and can cause jank.
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(scaleBracket, 100);
+            });
 
             // Use San Diego / Los Angeles local date (avoids UTC off-by-one after 5 PM)
             const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
@@ -1410,11 +1430,32 @@
             if (card) card.classList.toggle("ft-card", val === "FT");
         }
 
+        // ── KNOCKOUT RESULTS SYNC ─────────────────────────────────────────────────
+        // resolveSlots() reads knockout-round results (R32 onward) from a
+        // separate "wc2026_knockout" key so it can propagate winners through
+        // the bracket (R16 -> QF -> SF -> Final). Keep that key in sync with
+        // whatever scores have been entered on the Matches tab.
+        function syncKnockoutResults() {
+            const koResults = {};
+            matchesData.forEach(m => {
+                if (m.id >= 73) {
+                    koResults[m.id] = { h: m.scoreHome, a: m.scoreAway };
+                }
+            });
+            localStorage.setItem("wc2026_knockout", JSON.stringify(koResults));
+        }
+
         // ── SAVE → persists + recalculates standings ──────────────────────────────
         function saveScores() {
             // Persist only the mutable fields
             const toSave = matchesData.map(({ id, scoreHome, scoreAway, status }) => ({ id, scoreHome, scoreAway, status }));
             localStorage.setItem("wc2026_matches", JSON.stringify(toSave));
+
+            // Keep the bracket's knockout-progression data in sync too, so
+            // entering a Round of 32+ score here updates who advances on the
+            // bracket itself.
+            syncKnockoutResults();
+
             // Recompute & re-render standings
             renderGroupStage();
             renderBracket();
@@ -1434,9 +1475,11 @@
         function resetScores() {
             if (!confirm("Reset all scores? This cannot be undone.")) return;
             localStorage.removeItem("wc2026_matches");
+            localStorage.removeItem("wc2026_knockout");
             matchesData = defaultMatches.map(m => ({ ...m }));
             filterMatches();
             renderGroupStage();
+            renderBracket();
         }
 
         // ── FILTER BY DATE ────────────────────────────────────────────────────────
@@ -1697,17 +1740,36 @@
             const scaler    = document.getElementById('bracket-scaler');
             const container = document.getElementById('bracket-container');
             if (!scaler || !container) return;
+
             const available = container.parentElement.offsetWidth - 32;
+            // If the Knockout tab isn't visible right now, offsetWidth is 0
+            // and "available" goes negative — which would produce a negative
+            // scale ratio and collapse the bracket's height. Bail out and
+            // leave the previous (valid) sizing in place; the click handler
+            // below re-runs this once the tab is actually visible.
+            if (available <= 0) return;
+
             const natural   = 9 * 200 + 260 + 10 * 8;  // 9 cols + center + gaps
             const ratio     = Math.min(1, available / natural);
             // TREE_H + HDR_H + padding — matches the constants in renderBracket
             const treeH     = 1440 + 32 + 16;
+
+            scaler.style.transformOrigin = 'top left';
             scaler.style.transform       = 'scale(' + ratio + ')';
             scaler.style.width           = natural + 'px';
             scaler.style.height          = treeH + 'px';
-            scaler.style.transformOrigin = 'top left';
-            container.style.height       = (treeH * ratio + 40) + 'px';
-            container.style.overflow     = 'hidden';
+
+            // Center the scaled bracket within the available width ourselves.
+            // (Previously this relied on `text-align: center` centering the
+            // full-size, pre-transform box — but once transform-origin moves
+            // to "top left", the *visual* box no longer lines up with where
+            // that centering placed the *layout* box, leaving the bracket
+            // shifted off-center, especially on narrow/mobile screens.)
+            const scaledWidth = natural * ratio;
+            scaler.style.marginLeft = Math.max(0, (available - scaledWidth) / 2) + 'px';
+
+            container.style.height   = (treeH * ratio + 40) + 'px';
+            container.style.overflow = 'hidden';
         }
 
 
