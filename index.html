@@ -598,18 +598,10 @@
         }
 
         @media (max-width: 768px) {
-            /* 1. Allow the root document to use absolute full width */
-            html, body {
-                width: 100% !important;
-                max-width: 100vw !important;
-                overflow-x: hidden;
-                margin: 0;
-                padding: 0;
-            }
+            /* Keep your html, body, and main stretch rules from before! */
 
-            /* 2. Header and Nav remains perfectly stacked and full width */
             header { 
-                padding: 0.75rem 1rem !important; 
+                padding: 1rem !important; 
                 width: 100% !important;
                 left: 0 !important;
                 margin: 0 !important;
@@ -618,75 +610,34 @@
 
             header nav {
                 display: flex !important;
-                flex-direction: column !important;
+                flex-direction: column !important; /* Keeps the Logo centered on top */
                 align-items: center !important;
-                gap: 10px !important;
+                gap: 16px !important; /* Space between logo and the grid */
                 width: 100% !important;
             }
 
-            header .logo {
-                font-size: 1.25rem !important;
-                text-align: center !important;
-                margin-bottom: 2px !important;
-            }
-
+            /* THE NEW 2x2 GRID */
             .nav-links {
-                display: flex !important;
+                display: grid !important;
+                grid-template-columns: 1fr 1fr !important; /* Creates 2 equal-width columns */
+                grid-template-rows: auto auto !important; /* Creates 2 rows */
+                gap: 10px !important; /* Space between the grid buttons */
                 width: 100% !important;
-                justify-content: space-between !important;
-                gap: 6px !important;
-                flex-wrap: nowrap !important;
                 padding: 0 !important;
             }
 
+            /* BUTTON STYLING FOR THE GRID */
             .nav-link {
-                flex: 1 !important;
+                display: flex !important;
+                justify-content: center !important;
+                align-items: center !important;
                 text-align: center !important;
-                font-size: 0.8rem !important;
-                padding: 8px 2px !important;
-                white-space: nowrap !important;
-            }
-
-            /* 3. STRETCH: Expand the main container edge-to-edge */
-            main, .container {
+                font-size: 0.9rem !important; /* Slightly larger, easier to read */
+                padding: 14px 8px !important; /* Taller padding makes it feel like an app button */
                 width: 100% !important;
-                max-width: 100% !important;
-                padding: 8px !important; /* Minimal padding so cards stretch close to the screen borders */
-                margin: 0 !important;
-                box-sizing: border-box;
-            }
-
-            /* 4. STRETCH: Force layout grids and match lists to fill 100% width */
-            .groups-grid, .matches-container, .matches-section {
-                display: grid !important;
-                grid-template-columns: 1fr !important; /* Single stacked column */
-                width: 100% !important;
-                max-width: 100% !important;
-                margin: 0 auto !important;
-                gap: 12px !important;
-            }
-
-            /* 5. STRETCH: Make cards fill the entire horizontal space available */
-            .group-card, .match-card, .date-section {
-                width: 100% !important;
-                max-width: 100% !important;
                 box-sizing: border-box !important;
-                margin-left: 0 !important;
-                margin-right: 0 !important;
-            }
-
-            /* 6. STRETCH: Maximize table width inside the scroll wrappers */
-            .table-responsive, .standings-table-wrapper {
-                width: 100% !important;
-                max-width: 100% !important;
-                overflow-x: auto !important;
-                -webkit-overflow-scrolling: touch;
-                margin: 0 !important;
-            }
-            
-            table {
-                width: 100% !important;
-                min-width: 100% !important; /* Stretches the table rows flat across the card */
+                height: 100% !important; /* Makes sure adjacent buttons match height perfectly */
+                white-space: normal !important; /* Allows "Knockout Bracket" to stack to two lines neatly inside its box */
             }
         }
     
