@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=initial-scale=1.0, maximum-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>FIFA World Cup 2026™ Hub</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -603,27 +603,46 @@
             header { 
                 padding: 1rem !important; 
                 width: 100% !important;
-                left: 0 !important;
                 margin: 0 !important;
                 box-sizing: border-box;
             }
 
+            /* Stack the logo above the nav instead of side-by-side —
+               without this, "nav { width: 100% }" below squeezes the
+               logo down to almost nothing and the title wraps one
+               word per line, overlapping the nav buttons. */
+            .header-container {
+                flex-direction: column !important;
+                gap: 1rem !important;
+            }
+
+            .logo {
+                text-align: center;
+            }
+
+            .logo h1 {
+                font-size: 1.5rem;
+            }
+
             header nav {
-                display: flex !important;
-                flex-direction: column !important; /* Keeps the Logo centered on top */
-                align-items: center !important;
-                gap: 16px !important; /* Space between logo and the grid */
                 width: 100% !important;
             }
 
-            /* THE NEW 2x2 GRID */
-            .nav-links {
+            /* THE NEW 2x2 GRID — targets the actual <ul> inside <nav>
+               (there's no element with class "nav-links" in the HTML,
+               so the old selector never matched anything). The 3rd
+               item (Knockout Bracket) spans both columns on its own row. */
+            nav ul {
                 display: grid !important;
-                grid-template-columns: 1fr 1fr !important; /* Creates 2 equal-width columns */
-                grid-template-rows: auto auto !important; /* Creates 2 rows */
-                gap: 10px !important; /* Space between the grid buttons */
+                grid-template-columns: 1fr 1fr !important;
+                gap: 10px !important;
                 width: 100% !important;
                 padding: 0 !important;
+                list-style: none !important;
+            }
+
+            nav ul li:nth-child(3) {
+                grid-column: 1 / -1;
             }
 
             /* BUTTON STYLING FOR THE GRID */
