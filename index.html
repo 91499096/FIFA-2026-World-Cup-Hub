@@ -600,10 +600,17 @@
         @media (max-width: 768px) {
             /* Keep your html, body, and main stretch rules from before! */
 
+            /* Full-bleed: extend to the true edges of the screen, same as
+               the group/match cards below, instead of stopping short. */
             header { 
                 padding: 1rem !important; 
-                width: 100% !important;
-                margin: 0 !important;
+                width: 100vw !important;
+                max-width: 100vw !important;
+                left: 50% !important;
+                margin-left: -50vw !important;
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+                margin-right: 0 !important;
                 box-sizing: border-box;
             }
 
@@ -691,6 +698,18 @@
                 width: 100% !important;
                 margin: 0 0 12px 0 !important; /* Keep bottom margin for spacing, remove side margins */
                 box-sizing: border-box !important;
+            }
+
+            /* 5. Stretch the Cloud Sync card to match the group/match cards */
+            .sync-container {
+                width: 100vw !important;
+                max-width: 100vw !important;
+                position: relative !important;
+                left: 50% !important;
+                margin-left: -50vw !important;
+                margin-right: 0 !important;
+                box-sizing: border-box !important;
+                border-radius: 0 !important;
             }
         }
     
