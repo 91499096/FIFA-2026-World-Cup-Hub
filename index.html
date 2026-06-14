@@ -598,7 +598,16 @@
         }
 
         @media (max-width: 768px) {
-            /* 1. Reset header to stack elements vertically */
+            /* 1. Allow the root document to use absolute full width */
+            html, body {
+                width: 100% !important;
+                max-width: 100vw !important;
+                overflow-x: hidden;
+                margin: 0;
+                padding: 0;
+            }
+
+            /* 2. Header and Nav remains perfectly stacked and full width */
             header { 
                 padding: 0.75rem 1rem !important; 
                 width: 100% !important;
@@ -609,35 +618,75 @@
 
             header nav {
                 display: flex !important;
-                flex-direction: column !important; /* Puts the title on top and links below */
+                flex-direction: column !important;
                 align-items: center !important;
                 gap: 10px !important;
                 width: 100% !important;
             }
 
             header .logo {
-                font-size: 1.25rem !important; /* Slightly smaller logo text for mobile screens */
+                font-size: 1.25rem !important;
                 text-align: center !important;
                 margin-bottom: 2px !important;
             }
 
-            /* 2. Format the links container to span full width evenly */
             .nav-links {
                 display: flex !important;
-                width: 100% !important; /* Takes up the entire width of the phone screen */
-                justify-content: space-between !important; /* Spreads the three choices evenly */
-                gap: 6px !important; /* Small space between tabs */
-                flex-wrap: nowrap !important; /* Strict rule: never break into a second row */
+                width: 100% !important;
+                justify-content: space-between !important;
+                gap: 6px !important;
+                flex-wrap: nowrap !important;
                 padding: 0 !important;
             }
 
-            /* 3. Scale buttons down to fit perfectly side-by-side */
             .nav-link {
-                flex: 1 !important; /* Forces all 3 tabs to be the exact same width */
+                flex: 1 !important;
                 text-align: center !important;
-                font-size: 0.8rem !important; /* Reduced text size to guarantee fit */
-                padding: 8px 2px !important; /* Compact padding */
-                white-space: nowrap !important; /* Stops long words like "Knockout" from wrapping inside the button */
+                font-size: 0.8rem !important;
+                padding: 8px 2px !important;
+                white-space: nowrap !important;
+            }
+
+            /* 3. STRETCH: Expand the main container edge-to-edge */
+            main, .container {
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 8px !important; /* Minimal padding so cards stretch close to the screen borders */
+                margin: 0 !important;
+                box-sizing: border-box;
+            }
+
+            /* 4. STRETCH: Force layout grids and match lists to fill 100% width */
+            .groups-grid, .matches-container, .matches-section {
+                display: grid !important;
+                grid-template-columns: 1fr !important; /* Single stacked column */
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 auto !important;
+                gap: 12px !important;
+            }
+
+            /* 5. STRETCH: Make cards fill the entire horizontal space available */
+            .group-card, .match-card, .date-section {
+                width: 100% !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+            }
+
+            /* 6. STRETCH: Maximize table width inside the scroll wrappers */
+            .table-responsive, .standings-table-wrapper {
+                width: 100% !important;
+                max-width: 100% !important;
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch;
+                margin: 0 !important;
+            }
+            
+            table {
+                width: 100% !important;
+                min-width: 100% !important; /* Stretches the table rows flat across the card */
             }
         }
     
