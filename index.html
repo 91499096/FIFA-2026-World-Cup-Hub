@@ -883,6 +883,13 @@
     font-size: 14px;
     padding: 8px 10px;
 }
+.winner-gold {
+    border-color: #fbbf24 !important;
+    background: rgba(251, 191, 36, 0.2) !important;
+    color: #fbbf24 !important;
+    font-weight: 800 !important;
+    box-shadow: 0 0 12px rgba(251, 191, 36, 0.6);
+}
 
 /* On mobile, ~30 bracket boxes each running backdrop-filter: blur() inside
    a transform: scale() container is a known trigger for mobile browsers
@@ -1614,25 +1621,41 @@
                 if(km.a>km.h) return slots[`M${mId}_t2`]||null;
                 return null; // draw → needs extra time, show TBD
             };
+
+            const loser = (mId) => {
+                const km=ko[mId];
+                if(!km||km.h===null||km.a===null) return null;
+                if(km.h>km.a) return slots[`M${mId}_t2`]||null; // Home won -> Away lost
+                if(km.a>km.h) return slots[`M${mId}_t1`]||null; // Away won -> Home lost
+                return null;
+            };
+
             const propagate = (pairs) => pairs.forEach(([o,a,b])=>{
                 slots[`M${o}_t1`] = winner(a) || (slots[`M${a}_t1`]?`W M${a}`:null);
                 slots[`M${o}_t2`] = winner(b) || (slots[`M${b}_t1`]?`W M${b}`:null);
             });
+
             propagate([[89,74,77],[90,73,75],[93,83,84],[94,81,82],
                        [91,76,78],[92,79,80],[95,86,88],[96,85,87]]);
             propagate([[97,89,90],[98,93,94],[99,91,92],[100,95,96]]);
             propagate([[101,97,98],[102,99,100]]);
+
+            slots["M103_t1"] = loser(101) || (slots["M101_t1"] ? "L M101" : null);
+            slots["M103_t2"] = loser(102) || (slots["M102_t1"] ? "L M102" : null);
+
             slots["M104_t1"]=winner(101)||(slots["M101_t1"]?"W M101":null);
             slots["M104_t2"]=winner(102)||(slots["M102_t1"]?"W M102":null);
 
             return slots;
         }
-
         // ── BRACKET RENDER ────────────────────────────────────────────────────────
         function renderBracket() {
             const container = document.getElementById('bracket-scaler');
             const slots = resolveSlots();
             const isReal = (v) => v && !v.startsWith('W M') && !v.startsWith('L M');
+
+            // Load the score data from localStorage
+            const koScores = JSON.parse(localStorage.getItem("wc2026_knockout") || "{}");
 
             // All sizes hardcoded — nothing reads from DOM before render
             const COL_W    = 200;
@@ -1677,17 +1700,51 @@
 
             const LABELS = {r32:'Round of 32', r16:'Round of 16', qf:'Quarter-Finals', sf:'Semi-Finals'};
 
+            // Helper function to safely get score markup
+            function getScoreSpan(matchId, side) {
+                const matchData = koScores[matchId];
+                if (!matchData || matchData.h === null || matchData.a === null) return '';
+                
+                // Get base scores
+                let score = side === 'home' ? matchData.h : matchData.a;
+                let penaltyText = '';
+
+                // If match went to penalties, format it nicely (e.g., "1 (4)")
+                if (matchData.h === matchData.a && matchData.ph !== undefined && matchData.pa !== undefined) {
+                    const pens = side === 'home' ? matchData.ph : matchData.pa;
+                    penaltyText = `<span style="font-size:10px; opacity:0.6; margin-left:2px">(${pens})</span>`;
+                }
+
+                return `<span class="slot-score" style="margin-left: auto; font-weight: bold; background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; display: flex; align-items: center;">${score}${penaltyText}</span>`;
+            }
+
             function makeCol(ids, roundKey, positions) {
                 let boxes = '';
                 ids.forEach(function(id, i) {
                     const t1 = slots['M' + id + '_t1'] || staticLabels['M' + id + '_t1'] || 'TBD';
                     const t2 = slots['M' + id + '_t2'] || staticLabels['M' + id + '_t2'] || 'TBD';
+                    
                     const k1 = isReal(slots['M' + id + '_t1']) ? ' team-known' : '';
                     const k2 = isReal(slots['M' + id + '_t2']) ? ' team-known' : '';
+
+                    // Check who won this specific match to apply standard text highlights if desired
+                    let wClass1 = '', wClass2 = '';
+                    const m = koScores[id];
+                    if (m && m.h !== null && m.a !== null) {
+                        if (m.h > m.a || (m.h === m.a && m.ph > m.pa)) wClass1 = ' winner-highlight';
+                        if (m.a > m.h || (m.h === m.a && m.pa > m.ph)) wClass2 = ' winner-highlight';
+                    }
+
                     boxes += '<div class="match-box" style="top:' + positions[i] + 'px">'
                            + '<div class="match-id">M' + id + '</div>'
-                           + '<div class="team-slot' + k1 + '">' + t1 + '</div>'
-                           + '<div class="team-slot' + k2 + '">' + t2 + '</div>'
+                           + '<div class="team-slot' + k1 + wClass1 + '" style="display:flex; align-items:center; width:100%; justify-content: space-between;">'
+                           + '  <div style="display:flex; align-items:center; gap:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + getFlag(t1) + t1 + '</div>'
+                           +    getScoreSpan(id, 'home')
+                           + '</div>'
+                           + '<div class="team-slot' + k2 + wClass2 + '" style="display:flex; align-items:center; width:100%; justify-content: space-between;">'
+                           + '  <div style="display:flex; align-items:center; gap:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + getFlag(t2) + t2 + '</div>'
+                           +    getScoreSpan(id, 'away')
+                           + '</div>'
                            + '</div>';
                 });
                 return '<div class="tree-col" style="width:' + COL_W + 'px">'
@@ -1698,23 +1755,54 @@
 
             const f1  = slots['M104_t1'] || 'TBD';
             const f2  = slots['M104_t2'] || 'TBD';
-            const fk1 = isReal(slots['M104_t1']) ? ' team-known' : '';
-            const fk2 = isReal(slots['M104_t2']) ? ' team-known' : '';
-            const t3a = slots['M101_t1'] ? 'L M101' : 'TBD';
-            const t3b = slots['M102_t1'] ? 'L M102' : 'TBD';
+            
+            let fk1 = isReal(slots['M104_t1']) ? ' team-known' : '';
+            let fk2 = isReal(slots['M104_t2']) ? ' team-known' : '';
+
+            // --- GOLD HIGHLIGHT LOGIC FOR FINAL ---
+            const finalMatch = koScores[104];
+            if (finalMatch && finalMatch.h !== null && finalMatch.a !== null) {
+                if (finalMatch.h > finalMatch.a || (finalMatch.h === finalMatch.a && finalMatch.ph > finalMatch.pa)) {
+                    fk1 += " winner-gold";
+                } else if (finalMatch.a > finalMatch.h || (finalMatch.h === finalMatch.a && finalMatch.pa > finalMatch.ph)) {
+                    fk2 += " winner-gold";
+                }
+            }
+
+            // Pull M103 teams from slots, fallback to L M101/M102 if not resolved yet
+            const t3a = slots['M103_t1'] || (slots['M101_t1'] ? 'L M101' : 'TBD');
+            const t3b = slots['M103_t2'] || (slots['M102_t1'] ? 'L M102' : 'TBD');
+            const kt3a = isReal(slots['M103_t1']) ? ' team-known' : '';
+            const kt3b = isReal(slots['M103_t2']) ? ' team-known' : '';
+
+            // Check third place match winner highlight
+            let tk3a = '', tk3b = '';
+            const thirdMatch = koScores[103];
+            if (thirdMatch && thirdMatch.h !== null && thirdMatch.a !== null) {
+                if (thirdMatch.h > thirdMatch.a || (thirdMatch.h === thirdMatch.a && thirdMatch.ph > thirdMatch.pa)) tk3a = ' winner-highlight';
+                if (thirdMatch.a > thirdMatch.h || (thirdMatch.h === thirdMatch.a && thirdMatch.pa > thirdMatch.ph)) tk3b = ' winner-highlight';
+            }
 
             const centerCol = '<div class="center-col" style="width:' + CTR_W + 'px">'
                 + '<div class="col-header" style="color:#fbbf24">&#x26BD; Championship</div>'
                 + '<div class="center-body" style="height:' + totalH + 'px">'
                 + '<div class="final-box" style="top:' + finalTop + 'px">'
                 + '<div class="col-header">&#x26BD; Final &mdash; M104</div>'
-                + '<div class="team-slot' + fk1 + '" style="display:flex;align-items:center;gap:6px">' + getFlag(f1) + f1 + '</div>'
-                + '<div class="team-slot' + fk2 + '" style="display:flex;align-items:center;gap:6px">' + getFlag(f2) + f2 + '</div>'
+                + '<div class="team-slot' + fk1 + '" style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
+                + '  <div style="display:flex;align-items:center;gap:6px">' + getFlag(f1) + f1 + '</div>' + getScoreSpan(104, 'home')
+                + '</div>'
+                + '<div class="team-slot' + fk2 + '" style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
+                + '  <div style="display:flex;align-items:center;gap:6px">' + getFlag(f2) + f2 + '</div>' + getScoreSpan(104, 'away')
+                + '</div>'
                 + '</div>'
                 + '<div class="third-box" style="top:' + thirdTop + 'px">'
                 + '<div class="col-header">&#x1F949; Third Place &mdash; M103</div>'
-                + '<div class="team-slot">' + t3a + '</div>'
-                + '<div class="team-slot">' + t3b + '</div>'
+                + '<div class="team-slot' + kt3a + tk3a + '" style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
+                + '  <div style="display:flex;align-items:center;gap:6px">' + getFlag(t3a) + t3a + '</div>' + getScoreSpan(103, 'home')
+                + '</div>'
+                + '<div class="team-slot' + kt3b + tk3b + '" style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
+                + '  <div style="display:flex;align-items:center;gap:6px">' + getFlag(t3b) + t3b + '</div>' + getScoreSpan(103, 'away')
+                + '</div>'
                 + '</div>'
                 + '</div></div>';
 
@@ -1742,16 +1830,18 @@
             if (!scaler || !container) return;
 
             const available = container.parentElement.offsetWidth - 32;
-            // If the Knockout tab isn't visible right now, offsetWidth is 0
-            // and "available" goes negative — which would produce a negative
-            // scale ratio and collapse the bracket's height. Bail out and
-            // leave the previous (valid) sizing in place; the click handler
-            // below re-runs this once the tab is actually visible.
             if (available <= 0) return;
 
             const natural   = 9 * 200 + 260 + 10 * 8;  // 9 cols + center + gaps
-            const ratio     = Math.min(1, available / natural);
-            // TREE_H + HDR_H + padding — matches the constants in renderBracket
+            
+            // Calculate ratio, but prevent microscopic scaling on mobile
+            let ratio = available / natural;
+            if (window.innerWidth <= 768) {
+                ratio = Math.max(0.4, ratio); // Forces it to stay readable, triggering horizontal scroll
+            } else {
+                ratio = Math.min(1, ratio);   // Normal desktop behavior
+            }
+
             const treeH     = 1440 + 32 + 16;
 
             scaler.style.transformOrigin = 'top left';
@@ -1759,17 +1849,12 @@
             scaler.style.width           = natural + 'px';
             scaler.style.height          = treeH + 'px';
 
-            // Center the scaled bracket within the available width ourselves.
-            // (Previously this relied on `text-align: center` centering the
-            // full-size, pre-transform box — but once transform-origin moves
-            // to "top left", the *visual* box no longer lines up with where
-            // that centering placed the *layout* box, leaving the bracket
-            // shifted off-center, especially on narrow/mobile screens.)
             const scaledWidth = natural * ratio;
-            scaler.style.marginLeft = Math.max(0, (available - scaledWidth) / 2) + 'px';
+            // Center on desktop, but align left on mobile so the scroll starts at the beginning
+            scaler.style.marginLeft = (window.innerWidth <= 768) ? '0px' : Math.max(0, (available - scaledWidth) / 2) + 'px';
 
             container.style.height   = (treeH * ratio + 40) + 'px';
-            container.style.overflow = 'hidden';
+            container.style.overflow = 'auto'; // Ensure native touch scrolling works
         }
 
 
