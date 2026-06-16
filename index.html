@@ -981,6 +981,33 @@
             <h2 class="section-title">Group Stage Standings</h2>
             <p class="section-desc">Live standings showing complete tournament analytics breakdown (W/D/L layout).</p>
             <div class="groups-grid" id="groups-container"></div>
+
+            <!-- THIRD PLACE RANKINGS -->
+            <div style="margin-top: 2.5rem;">
+                <h2 class="section-title">Third Place Rankings</h2>
+                <p class="section-desc">The top 8 third-placed teams (highlighted) advance to the Round of 32.</p>
+                <div style="max-width: 720px; margin: 0 auto;">
+                    <div class="group-card" style="max-width:100%;">
+                        <div class="group-header">Best Third-Place Teams</div>
+                        <div class="table-responsive"><table id="third-place-table">
+                            <thead><tr>
+                                <th>#</th>
+                                <th>Team</th>
+                                <th class="text-center">Group</th>
+                                <th class="text-center">W</th>
+                                <th class="text-center">D</th>
+                                <th class="text-center">L</th>
+                                <th class="text-center">GD</th>
+                                <th class="text-center">GF</th>
+                                <th class="text-center">Pts</th>
+                            </tr></thead>
+                            <tbody id="third-place-body">
+                                <tr><td colspan="9" class="text-center" style="color:var(--text-muted);padding:1.5rem;">Group stage results will populate this table.</td></tr>
+                            </tbody>
+                        </table></div>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- SECTION 2: MATCH FIXTURES WITH CALENDAR -->
@@ -988,23 +1015,41 @@
             <h2 class="section-title">Tournament Schedule</h2>
             <p class="section-desc">Browse all fixtures by date, including dynamically updating Knockout matches. Times in Pacific Time (PST/PDT).</p>
             
-            <div class="schedule-controls">
+            <div class="schedule-controls" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
                 <div class="calendar-wrapper">
                     <i class="fa-solid fa-calendar-days"></i>
                     <input type="date" id="date-picker" class="date-input">
                 </div>
-            </div>
-
-            <div id="missed-score-notification" style="display: none; background: #fef2f2; border-left: 4px solid #ef4444; color: #991b1b; padding: 12px; margin: 15px auto; max-width: 600px; border-radius: 4px; font-weight: 500; font-size: 0.9rem; text-align: left;">
+                <div class="calendar-wrapper">
+                    <i class="fa-solid fa-flag"></i>
+                    <select id="country-filter" class="filter-select" onchange="showTeamPage(this.value)" style="margin-left: 0.5rem; min-width: 200px;">
+                        <option value="">View a team's fixtures…</option>
+                    </select>
                 </div>
-
-            <div class="score-editor-bar">
-                <span class="save-status" id="save-status"><i class="fa-solid fa-circle-check"></i> Saved!</span>
-                <button class="reset-btn" onclick="resetScores()"><i class="fa-solid fa-rotate-left"></i> Reset All</button>
-                <button class="save-btn" onclick="saveScores()"><i class="fa-solid fa-floppy-disk"></i> Save Scores</button>
-                <button class="reset-btn" onclick="randomizeGroupStage()" style="background:#7c3aed; display:none;"><i class="fa-solid fa-dice"></i> Randomize Group Stage (Test)</button>
             </div>
-            <div class="matches-list" id="matches-container"></div>
+
+            <!-- TEAM FIXTURE PAGE (hidden until a team is selected) -->
+            <div id="team-page" style="display:none; margin-top: 1.5rem;">
+                <div style="display:flex; align-items:center; gap: 0.75rem; margin-bottom: 1.25rem;">
+                    <button onclick="closeTeamPage()" style="background:none;border:1px solid var(--border);color:var(--text-muted);border-radius:6px;padding:5px 12px;cursor:pointer;font-size:0.85rem;">
+                        <i class="fa-solid fa-arrow-left"></i> Back to all matches
+                    </button>
+                    <h3 id="team-page-title" style="margin:0;font-size:1.1rem;color:#ffffff;"></h3>
+                </div>
+                <div class="matches-list" id="team-matches-container"></div>
+            </div>
+
+            <!-- MAIN MATCHES VIEW -->
+            <div id="main-matches-view">
+                <div id="missed-score-notification" style="display: none; background: #fef2f2; border-left: 4px solid #ef4444; color: #991b1b; padding: 12px; margin: 15px auto; max-width: 600px; border-radius: 4px; font-weight: 500; font-size: 0.9rem; text-align: left;"></div>
+                <div class="score-editor-bar">
+                    <span class="save-status" id="save-status"><i class="fa-solid fa-circle-check"></i> Saved!</span>
+                    <button class="reset-btn" onclick="resetScores()"><i class="fa-solid fa-rotate-left"></i> Reset All</button>
+                    <button class="save-btn" onclick="saveScores()"><i class="fa-solid fa-floppy-disk"></i> Save Scores</button>
+                    <button class="reset-btn" onclick="randomizeGroupStage()" style="background:#7c3aed; display:none;"><i class="fa-solid fa-dice"></i> Randomize Group Stage (Test)</button>
+                </div>
+                <div class="matches-list" id="matches-container"></div>
+            </div>
         </section>
 
         <!-- SECTION 3: KNOCKOUT BRACKET (FIFA card-list style) -->
@@ -1299,6 +1344,16 @@
             filterMatches();
             datePicker.addEventListener("change", filterMatches);
 
+            // Populate country filter with all 48 teams sorted alphabetically
+            const countrySelect = document.getElementById("country-filter");
+            const allTeams = Object.values(groupTeams).flat().sort((a,b) => a.localeCompare(b));
+            allTeams.forEach(team => {
+                const opt = document.createElement("option");
+                opt.value = team;
+                opt.textContent = team;
+                countrySelect.appendChild(opt);
+            });
+
             checkMissedScores(matchesData);
 
             // Show the active sync code (if one was set up previously)
@@ -1334,8 +1389,8 @@
                         <thead><tr>
                             <th>Team</th>
                             <th class="text-center">W</th><th class="text-center">D</th>
-                            <th class="text-center">L</th><th class="text-center">GF</th>
-                            <th class="text-center">GD</th>
+                            <th class="text-center">L</th><th class="text-center">GD</th>
+                            <th class="text-center">GF</th>
                             <th class="text-center">Pts</th>
                         </tr></thead><tbody>`;
                 sorted.forEach(t => {
@@ -1344,22 +1399,59 @@
                         <td class="text-center">${t.w}</td>
                         <td class="text-center">${t.d}</td>
                         <td class="text-center">${t.l}</td>
-                        <td class="text-center">${t.gf}</td>
                         <td class="text-center font-bold">${t.gd > 0 ? '+'+t.gd : t.gd}</td>
+                        <td class="text-center">${t.gf}</td>
                         <td class="text-center font-bold" style="color:#22d3ee">${t.pts}</td>
                     </tr>`;
                 });
                 html += `</tbody></table></div></div>`;
                 container.innerHTML += html;
             }
+
+            // ── THIRD PLACE RANKINGS TABLE ────────────────────────────────────────
+            const rankings = getGroupRankings();
+            const thirds = [];
+            for (const [grp, pos] of Object.entries(rankings)) {
+                const t = pos[3];
+                if (!t) continue;
+                const played = matchesData.filter(m => m.group === grp && m.scoreHome !== null).length;
+                thirds.push({ ...t, group: grp, played });
+            }
+            const sorted3rd = [...thirds].sort(teamSort);
+            const body = document.getElementById("third-place-body");
+            if (!body) return;
+            if (sorted3rd.length === 0) {
+                body.innerHTML = `<tr><td colspan="9" class="text-center" style="color:var(--text-muted);padding:1.5rem;">Group stage results will populate this table.</td></tr>`;
+                return;
+            }
+            body.innerHTML = sorted3rd.map((t, i) => {
+                const isTop8 = i < 8;
+                const rowStyle = isTop8
+                    ? "background: rgba(34,211,238,0.10); border-left: 3px solid #22d3ee;"
+                    : "opacity: 0.65;";
+                const badge = isTop8
+                    ? `<span style="font-size:0.7rem;background:#22d3ee;color:#0f172a;border-radius:4px;padding:1px 5px;margin-left:5px;font-weight:700;">QUALIFIES</span>`
+                    : "";
+                return `<tr style="${rowStyle}">
+                    <td class="text-center" style="color:var(--text-muted);font-size:0.85rem;">${i+1}</td>
+                    <td class="font-bold" style="display:flex;align-items:center;">${getFlag(t.name)}${t.name}${badge}</td>
+                    <td class="text-center" style="color:var(--text-muted);font-size:0.85rem;">${t.group}</td>
+                    <td class="text-center">${t.w}</td>
+                    <td class="text-center">${t.d}</td>
+                    <td class="text-center">${t.l}</td>
+                    <td class="text-center font-bold">${t.gd > 0 ? '+'+t.gd : t.gd}</td>
+                    <td class="text-center">${t.gf}</td>
+                    <td class="text-center font-bold" style="color:#22d3ee">${t.pts}</td>
+                </tr>`;
+            }).join("");
         }
 
         // ── MATCH CARDS WITH SCORE INPUTS ─────────────────────────────────────────
-        function renderMatches(data) {
-            const container = document.getElementById("matches-container");
+        function renderMatches(data, containerId) {
+            const container = document.getElementById(containerId || "matches-container");
             container.innerHTML = "";
             if (data.length === 0) {
-                container.innerHTML = "<p style='grid-column:1/-1;text-align:center;padding:2rem;color:var(--text-muted)'>No matches scheduled for this date.</p>";
+                container.innerHTML = "<p style='grid-column:1/-1;text-align:center;padding:2rem;color:var(--text-muted)'>No matches found.</p>";
                 return;
             }
             
@@ -1520,6 +1612,27 @@
             const dateVal = document.getElementById("date-picker").value;
             const filtered = matchesData.filter(m => !dateVal || m.dateISO === dateVal);
             renderMatches(filtered);
+        }
+
+        function showTeamPage(team) {
+            if (!team) { closeTeamPage(); return; }
+            const slots = typeof resolveSlots === "function" ? resolveSlots() : {};
+            const teamMatches = matchesData.filter(m => {
+                let home = m.id >= 73 ? (slots[`M${m.id}_t1`] || m.home) : m.home;
+                let away = m.id >= 73 ? (slots[`M${m.id}_t2`] || m.away) : m.away;
+                return home === team || away === team;
+            });
+
+            document.getElementById("main-matches-view").style.display = "none";
+            document.getElementById("team-page").style.display = "block";
+            document.getElementById("team-page-title").innerHTML = `${getFlag(team)}<span style="font-weight:700;">${team}</span> — All Fixtures (${teamMatches.length} matches)`;
+            renderMatches(teamMatches, "team-matches-container");
+        }
+
+        function closeTeamPage() {
+            document.getElementById("team-page").style.display = "none";
+            document.getElementById("main-matches-view").style.display = "block";
+            document.getElementById("country-filter").value = "";
         }
 
         function checkMissedScores(allMatchesArray) {
