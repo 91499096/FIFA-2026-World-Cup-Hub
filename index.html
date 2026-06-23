@@ -1973,13 +1973,18 @@
             // All sizes hardcoded — nothing reads from DOM before render
             const COL_W    = 200;
             const CTR_W    = 260;
-            const BOX_H    = 84;
+            
+            // --- UPDATED MATH: Compensating for Header Text ---
+            const BOX_H    = 116;  
+            const FINAL_H  = 160;  
+            const boxHalf  = 58;      // Exactly half of BOX_H
+            
             const TREE_H   = 1440;
             const HDR_H    = 32;
-            const FINAL_H  = 136;
+            const HEADER_OFFSET = 34; // The pixel height of the "Round of X" text pushing the boxes down
             const THIRD_H  = 112;
+            const GAP      = 40; 
 
-            // --- NEW: 48-Team Flag Color Dictionary ---
             const countryColors = {
                 "Argentina": ["#74acdf", "#ffffff", "#74acdf"],
                 "Mexico": ["#006847", "#ffffff", "#ce1126"],
@@ -1998,7 +2003,7 @@
                 "Paraguay": ["#d52b1e", "#ffffff", "#0038a8"],
                 "Australia": ["#00008b", "#ffffff", "#ff0000"],
                 "Türkiye": ["#e30a17", "#ffffff", "#e30a17"],
-                "Germany": ["#333333", "#dd0000", "#ffcc00"], // 333 instead of pure black for dark theme visibility
+                "Germany": ["#333333", "#dd0000", "#ffcc00"], 
                 "Curaçao": ["#002b7f", "#f9e814", "#002b7f"],
                 "Ivory Coast": ["#f77f00", "#ffffff", "#009e60"],
                 "Ecuador": ["#ffdd00", "#034ea2", "#ed1c24"],
@@ -2031,24 +2036,17 @@
                 "Panama": ["#005293", "#ffffff", "#d21034"]
             };
 
-            // --- NEW: Dynamic Style Generator ---
             function getGlowStyle(teamName, isWinner, isGoldFinal) {
                 if (!isReal(teamName)) return "";
-
                 const colors = countryColors[teamName] || ["#0d9488", "#ffffff", "#0d9488"];
-                
                 if (isWinner) {
-                    // Winner gets 25% opacity background gradient and 50% opacity box-shadow glow
                     const grad = colors.map(c => c + '40').join(', '); 
                     const glow = colors[0] + '80'; 
-                    
-                    // If they won the whole tournament, give them a golden box shadow, but keep their country flag background!
                     if (isGoldFinal) {
                         return `border-color: #fbbf24; background: linear-gradient(90deg, ${grad}); box-shadow: 0 0 16px rgba(251,191,36,0.8); color: #fbbf24; font-weight: 800;`;
                     }
                     return `border-color: ${colors[0]}; background: linear-gradient(90deg, ${grad}); box-shadow: 0 0 12px ${glow}; color: #ffffff; font-weight: 700;`;
                 } else {
-                    // Known teams waiting to play get a faint 10% opacity country gradient
                     const grad = colors.map(c => c + '1A').join(', '); 
                     return `border-color: ${colors[0]}66; background: linear-gradient(90deg, ${grad}); color: #e2e8f0;`;
                 }
@@ -2068,9 +2066,7 @@
             function midpoints(prev) {
                 const out = [];
                 for (let i = 0; i < prev.length; i += 2) {
-                    const c1 = prev[i]   + BOX_H / 2;
-                    const c2 = prev[i+1] + BOX_H / 2;
-                    out.push(Math.round((c1 + c2) / 2 - BOX_H / 2));
+                    out.push(Math.round((prev[i] + prev[i+1]) / 2));
                 }
                 return out;
             }
@@ -2100,12 +2096,61 @@
                 return `<span class="slot-score" style="margin-left: auto; font-weight: bold; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; display: flex; align-items: center;">${score}${penaltyText}</span>`;
             }
 
+            let svgPaths = '';
+            const cX = [0, 240, 480, 720, 960, 1260, 1500, 1740, 1980]; 
+
+            function getWinnerColorStr(id) {
+                const m = koScores[id];
+                if (!m || m.h === null || m.a === null) return { color: 'rgba(255,255,255,0.12)', width: 2 };
+                let w = null;
+                const h = Number(m.h), a = Number(m.a);
+                if (h > a || (h === a && Number(m.ph) > Number(m.pa))) {
+                    w = slots[`M${id}_t1`] || staticLabels[`M${id}_t1`];
+                } else if (a > h || (h === a && Number(m.pa) > Number(m.ph))) {
+                    w = slots[`M${id}_t2`] || staticLabels[`M${id}_t2`];
+                }
+                if (w && isReal(w) && countryColors[w]) return { color: countryColors[w][0], width: 3 };
+                return { color: '#0d9488', width: 3 }; 
+            }
+
+            function drawLine(x1, y1, x2, y2, matchId) {
+                const style = getWinnerColorStr(matchId);
+                const midX = (x1 + x2) / 2;
+                svgPaths += `<path d="M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}" stroke="${style.color}" stroke-width="${style.width}" fill="none" stroke-linejoin="round" />`;
+            }
+
+            const r32LeftIds = [74, 77, 73, 75, 83, 84, 81, 82];
+            const r16LeftIds = [89, 90, 93, 94];
+            const qfLeftIds  = [97, 98];
+            const sfLeftIds  = [101];
+
+            const r32RightIds = [76, 78, 79, 80, 86, 88, 85, 87];
+            const r16RightIds = [91, 92, 95, 96];
+            const qfRightIds  = [99, 100];
+            const sfRightIds  = [102];
+
+            const r32rPos = [...p32].reverse();
+            const r16rPos = [...p16].reverse();
+            const rqfPos  = [...pQF].reverse();
+            const rsfPos  = [...pSF].reverse();
+
+            // Draw Left SVG lines
+            for(let i=0; i<8; i++) drawLine(cX[0]+COL_W, p32[i]+boxHalf, cX[1], p16[Math.floor(i/2)]+boxHalf, r32LeftIds[i]);
+            for(let i=0; i<4; i++) drawLine(cX[1]+COL_W, p16[i]+boxHalf, cX[2], pQF[Math.floor(i/2)]+boxHalf, r16LeftIds[i]);
+            for(let i=0; i<2; i++) drawLine(cX[2]+COL_W, pQF[i]+boxHalf, cX[3], pSF[Math.floor(i/2)]+boxHalf, qfLeftIds[i]);
+            for(let i=0; i<1; i++) drawLine(cX[3]+COL_W, pSF[i]+boxHalf, cX[4]+8, finalTop + FINAL_H/2, sfLeftIds[i]);
+
+            // Draw Right SVG lines
+            for(let i=0; i<8; i++) drawLine(cX[8], r32rPos[i]+boxHalf, cX[7]+COL_W, r16rPos[Math.floor(i/2)]+boxHalf, r32RightIds[i]);
+            for(let i=0; i<4; i++) drawLine(cX[7], r16rPos[i]+boxHalf, cX[6]+COL_W, rqfPos[Math.floor(i/2)]+boxHalf, r16RightIds[i]);
+            for(let i=0; i<2; i++) drawLine(cX[6], rqfPos[i]+boxHalf, cX[5]+COL_W, rsfPos[Math.floor(i/2)]+boxHalf, qfRightIds[i]);
+            for(let i=0; i<1; i++) drawLine(cX[5], rsfPos[i]+boxHalf, cX[4]+CTR_W-8, finalTop + FINAL_H/2, sfRightIds[i]);
+
             function makeCol(ids, roundKey, positions) {
                 let boxes = '';
                 ids.forEach(function(id, i) {
                     const t1 = slots['M' + id + '_t1'] || staticLabels['M' + id + '_t1'] || 'TBD';
                     const t2 = slots['M' + id + '_t2'] || staticLabels['M' + id + '_t2'] || 'TBD';
-                    
                     const k1 = isReal(t1) ? ' team-known' : '';
                     const k2 = isReal(t2) ? ' team-known' : '';
 
@@ -2116,10 +2161,8 @@
                         if (Number(m.a) > Number(m.h) || (Number(m.h) === Number(m.a) && Number(m.pa) > Number(m.ph))) isWinner2 = true;
                     }
 
-                    // Generate custom country styles
                     const style1 = getGlowStyle(t1, isWinner1, false);
                     const style2 = getGlowStyle(t2, isWinner2, false);
-
                     const dtStr = getMatchTimeStr(id);
 
                     boxes += '<div class="match-box" style="top:' + positions[i] + 'px">'
@@ -2137,7 +2180,7 @@
                         + '</div>'
                         + '</div>';
                 });
-                return '<div class="tree-col" style="width:' + COL_W + 'px">'
+                return '<div class="tree-col" style="width:' + COL_W + 'px; position: relative; z-index: 1;">'
                     + '<div class="col-header">' + LABELS[roundKey] + '</div>'
                     + '<div class="col-body" style="height:' + totalH + 'px">' + boxes + '</div>'
                     + '</div>';
@@ -2175,7 +2218,7 @@
             const dtFinal = getMatchTimeStr(104);
             const dtThird = getMatchTimeStr(103);
 
-            const centerCol = '<div class="center-col" style="width:' + CTR_W + 'px">'
+            const centerCol = '<div class="center-col" style="width:' + CTR_W + 'px; position: relative; z-index: 1;">'
                 + '<div class="col-header" style="color:#fbbf24">&#x26BD; Championship</div>'
                 + '<div class="center-body" style="height:' + totalH + 'px">'
                 + '<div class="final-box" style="top:' + finalTop + 'px">'
@@ -2205,7 +2248,11 @@
             const r16r = [].concat(p16).reverse();
             const r32r = [].concat(p32).reverse();
 
-            container.innerHTML = '<div class="fifa-tree" style="padding-top:' + HDR_H + 'px">'
+            // --- UPDATED: SVG position pushed down by HEADER_OFFSET ---
+            container.innerHTML = '<div class="fifa-tree" style="padding-top:' + HDR_H + 'px; gap: ' + GAP + 'px; position: relative;">'
+                + '<svg style="position: absolute; top: ' + (HDR_H + HEADER_OFFSET) + 'px; left: 0; width: 2180px; height: ' + totalH + 'px; pointer-events: none; z-index: 0;">'
+                + svgPaths
+                + '</svg>'
                 + makeCol([74,77,73,75,83,84,81,82], 'r32', p32)
                 + makeCol([89,90,93,94],              'r16', p16)
                 + makeCol([97,98],                    'qf',  pQF)
@@ -2226,17 +2273,17 @@
             const available = container.parentElement.offsetWidth - 32;
             if (available <= 0) return;
 
-            const natural   = 9 * 200 + 260 + 10 * 8;  // 9 cols + center + gaps
+            // UPDATED MATH: Matches the new 40px gaps we made for the lines
+            const natural = 8 * 200 + 260 + 8 * 40; 
             
-            // Calculate ratio, but prevent microscopic scaling on mobile
             let ratio = available / natural;
             if (window.innerWidth <= 768) {
-                ratio = Math.max(0.4, ratio); // Forces it to stay readable, triggering horizontal scroll
+                ratio = Math.max(0.35, ratio); // slightly smaller lower bound so lines fit nicely on mobile
             } else {
-                ratio = Math.min(1, ratio);   // Normal desktop behavior
+                ratio = Math.min(1, ratio);   
             }
 
-            const treeH     = 1440 + 32 + 16;
+            const treeH = 1440 + 32 + 16;
 
             scaler.style.transformOrigin = 'top left';
             scaler.style.transform       = 'scale(' + ratio + ')';
@@ -2244,11 +2291,10 @@
             scaler.style.height          = treeH + 'px';
 
             const scaledWidth = natural * ratio;
-            // Center on desktop, but align left on mobile so the scroll starts at the beginning
             scaler.style.marginLeft = (window.innerWidth <= 768) ? '0px' : Math.max(0, (available - scaledWidth) / 2) + 'px';
 
             container.style.height   = (treeH * ratio + 40) + 'px';
-            container.style.overflow = 'auto'; // Ensure native touch scrolling works
+            container.style.overflow = 'auto'; 
         }
 
 
