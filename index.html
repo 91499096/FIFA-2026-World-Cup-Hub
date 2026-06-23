@@ -1263,13 +1263,19 @@
             const saved = localStorage.getItem("wc2026_matches");
             if (saved) {
                 const parsed = JSON.parse(saved);
-                // Merge saved scores/status into defaultMatches (preserve fixture metadata)
                 return defaultMatches.map(m => {
                     const s = parsed.find(p => p.id === m.id);
-                    return s ? { ...m, scoreHome: s.scoreHome, scoreAway: s.scoreAway, status: s.status } : m;
+                    return s ? { 
+                        ...m, 
+                        scoreHome: s.scoreHome, 
+                        scoreAway: s.scoreAway, 
+                        status: s.status,
+                        penHome: s.penHome !== undefined ? s.penHome : null, 
+                        penAway: s.penAway !== undefined ? s.penAway : null
+                    } : m;
                 });
             }
-            return defaultMatches.map(m => ({ ...m }));
+            return defaultMatches.map(m => ({ ...m, penHome: null, penAway: null }));
         }
 
         let matchesData = loadMatches();
@@ -1390,11 +1396,17 @@
             });
         }
 
-        // ── GROUP STANDINGS (computed live) ───────────────────────────────────────
         function renderGroupStage() {
             const groupData = computeGroupData();
+            
+            // Calculate the top 8 third-place teams first for the green highlights
+            const rankings = getGroupRankings();
+            const best3rdsNames = getBest3rds(rankings).map(t => t.name); 
+
             const container = document.getElementById("groups-container");
             container.innerHTML = "";
+            
+            // 1. RENDER ALL 12 GROUP TABLES
             for (const [groupName, teams] of Object.entries(groupData)) {
                 const sorted = [...teams].sort((a,b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
                 let html = `<div class="group-card">
@@ -1407,8 +1419,19 @@
                             <th class="text-center">GF</th>
                             <th class="text-center">Pts</th>
                         </tr></thead><tbody>`;
-                sorted.forEach(t => {
-                    html += `<tr>
+                        
+                sorted.forEach((t, idx) => {
+                    let rowStyle = "";
+                    // 1st place: Gold
+                    if (idx === 0) rowStyle = "border-left: 4px solid #fbbf24; background: rgba(251, 191, 36, 0.05);"; 
+                    // 2nd place: Silver
+                    if (idx === 1) rowStyle = "border-left: 4px solid #94a3b8; background: rgba(148, 163, 184, 0.05);"; 
+                    // 3rd place: Green (ONLY if their name is in the top 8 list)
+                    if (idx === 2 && best3rdsNames.includes(t.name)) {
+                        rowStyle = "border-left: 4px solid #10b981; background: rgba(16, 185, 129, 0.05);"; 
+                    }
+
+                    html += `<tr style="${rowStyle}">
                         <td class="font-bold" style="display: flex; align-items: center; border-bottom: none;">${getFlag(t.name)}${t.name}</td>
                         <td class="text-center">${t.w}</td>
                         <td class="text-center">${t.d}</td>
@@ -1421,23 +1444,26 @@
                 html += `</tbody></table></div></div>`;
                 container.innerHTML += html;
             }
-
-            // ── THIRD PLACE RANKINGS TABLE ────────────────────────────────────────
-            const rankings = getGroupRankings();
+            
+            // 2. RENDER THE THIRD PLACE RANKINGS TABLE
             const thirds = [];
+            // We reuse the `rankings` variable we declared at the very top here!
             for (const [grp, pos] of Object.entries(rankings)) {
-                const t = pos[3];
+                const t = pos[3]; // '3' is the 3rd place team (1-indexed in your object)
                 if (!t) continue;
                 const played = matchesData.filter(m => m.group === grp && m.scoreHome !== null).length;
                 thirds.push({ ...t, group: grp, played });
             }
+            
             const sorted3rd = [...thirds].sort(teamSort);
             const body = document.getElementById("third-place-body");
             if (!body) return;
+            
             if (sorted3rd.length === 0) {
                 body.innerHTML = `<tr><td colspan="9" class="text-center" style="color:var(--text-muted);padding:1.5rem;">Group stage results will populate this table.</td></tr>`;
                 return;
             }
+            
             body.innerHTML = sorted3rd.map((t, i) => {
                 const isTop8 = i < 8;
                 const rowStyle = isTop8
@@ -1446,6 +1472,7 @@
                 const badge = isTop8
                     ? `<span style="font-size:0.7rem;background:#22d3ee;color:#0f172a;border-radius:4px;padding:1px 5px;margin-left:5px;font-weight:700;">QUALIFIES</span>`
                     : "";
+                    
                 return `<tr style="${rowStyle}">
                     <td class="text-center" style="color:var(--text-muted);font-size:0.85rem;">${i+1}</td>
                     <td class="font-bold" style="display:flex;align-items:center;">${getFlag(t.name)}${t.name}${badge}</td>
@@ -1486,6 +1513,17 @@
                     currentAway = slots[`M${match.id}_t2`] || match.away;
                 }
 
+                // --- UPDATED: Penalty Logic ---
+                const isKnockout = match.id >= 73;
+                const isTie = match.scoreHome !== null && match.scoreAway !== null && (Number(match.scoreHome) === Number(match.scoreAway));
+                
+                // Determine initial visibility
+                const penDisplay = (isKnockout && isTie && isFT) ? "flex" : "none";
+
+                // Safely check if penHome/penAway exist on the match object yet
+                const phVal = match.penHome !== undefined && match.penHome !== null ? match.penHome : "";
+                const paVal = match.penAway !== undefined && match.penAway !== null ? match.penAway : "";
+
                 container.innerHTML += `
                 <div class="match-card${isFT ? ' ft-card' : ''}" data-id="${match.id}">
                     <div>
@@ -1501,6 +1539,11 @@
                             <div class="match-row">
                                 <span class="team-name" style="display: flex; align-items: center;">${getFlag(currentHome)}${currentHome}</span>
                                 <div class="score-input-wrap">
+                                    ${isKnockout ? `
+                                    <div class="pen-wrap-${match.id}" style="display: ${penDisplay}; align-items: center; margin-right: 4px;">
+                                        <input type="number" class="score-num-input" style="border-color: #fbbf24; width:35px; height:28px; font-size:0.85rem;" value="${phVal}" placeholder="P" oninput="updateScore(${match.id},'penHome',this.value)"> 
+                                        <span style="font-size:10px;color:#fbbf24;margin-left:4px;">PKs</span>
+                                    </div>` : ''}
                                     <input type="number" class="score-num-input" min="0" max="99"
                                         value="${hVal}" placeholder="–"
                                         oninput="updateScore(${match.id},'home',this.value)"
@@ -1510,6 +1553,11 @@
                             <div class="match-row">
                                 <span class="team-name" style="display: flex; align-items: center;">${getFlag(currentAway)}${currentAway}</span>
                                 <div class="score-input-wrap">
+                                    ${isKnockout ? `
+                                    <div class="pen-wrap-${match.id}" style="display: ${penDisplay}; align-items: center; margin-right: 4px;">
+                                        <input type="number" class="score-num-input" style="border-color: #fbbf24; width:35px; height:28px; font-size:0.85rem;" value="${paVal}" placeholder="P" oninput="updateScore(${match.id},'penAway',this.value)"> 
+                                        <span style="font-size:10px;color:#fbbf24;margin-left:4px;">PKs</span>
+                                    </div>` : ''}
                                     <input type="number" class="score-num-input" min="0" max="99"
                                         value="${aVal}" placeholder="–"
                                         oninput="updateScore(${match.id},'away',this.value)"
@@ -1534,16 +1582,38 @@
             const m = matchesData.find(x => x.id === id);
             if (!m) return;
             const n = val === "" ? null : parseInt(val, 10);
+            
             if (side === "home") m.scoreHome = isNaN(n) ? null : n;
-            else                 m.scoreAway = isNaN(n) ? null : n;
+            else if (side === "away") m.scoreAway = isNaN(n) ? null : n;
+            else if (side === "penHome") m.penHome = isNaN(n) ? null : n; 
+            else if (side === "penAway") m.penAway = isNaN(n) ? null : n; 
+
+            // NEW: Instantly show/hide penalty boxes if a knockout match is tied
+            if (m.id >= 73 && (side === "home" || side === "away")) {
+                const isTie = m.scoreHome !== null && m.scoreAway !== null && (m.scoreHome === m.scoreAway);
+                const isFT = m.status === "FT";
+                document.querySelectorAll(`.pen-wrap-${m.id}`).forEach(el => {
+                    el.style.display = isTie ? "flex" : "none";
+                });
+            }
         }
 
         function updateStatus(id, val) {
             const m = matchesData.find(x => x.id === id);
             if (m) m.status = val;
+            
             // Update card border live
             const card = document.querySelector(`.match-card[data-id="${id}"]`);
             if (card) card.classList.toggle("ft-card", val === "FT");
+
+            // NEW: Instantly show/hide penalty boxes when status changes
+            if (m && m.id >= 73) {
+                const isTie = m.scoreHome !== null && m.scoreAway !== null && (m.scoreHome === m.scoreAway);
+                const isFT = m.status === "FT";
+                document.querySelectorAll(`.pen-wrap-${m.id}`).forEach(el => {
+                    el.style.display = (isTie && isFT) ? "flex" : "none";
+                });
+            }
         }
 
         // ── KNOCKOUT RESULTS SYNC ─────────────────────────────────────────────────
@@ -1555,7 +1625,8 @@
             const koResults = {};
             matchesData.forEach(m => {
                 if (m.id >= 73) {
-                    koResults[m.id] = { h: m.scoreHome, a: m.scoreAway };
+                    // Include ph and pa mapping for the bracket
+                    koResults[m.id] = { h: m.scoreHome, a: m.scoreAway, ph: m.penHome, pa: m.penAway };
                 }
             });
             localStorage.setItem("wc2026_knockout", JSON.stringify(koResults));
@@ -1563,25 +1634,17 @@
 
         // ── SAVE → persists + recalculates standings ──────────────────────────────
         function saveScores() {
-            // Persist only the mutable fields
-            const toSave = matchesData.map(({ id, scoreHome, scoreAway, status }) => ({ id, scoreHome, scoreAway, status }));
+            // Add penHome and penAway to the saved object mapping
+            const toSave = matchesData.map(({ id, scoreHome, scoreAway, status, penHome, penAway }) => 
+                ({ id, scoreHome, scoreAway, status, penHome, penAway })
+            );
             localStorage.setItem("wc2026_matches", JSON.stringify(toSave));
-
-            // Keep the bracket's knockout-progression data in sync too, so
-            // entering a Round of 32+ score here updates who advances on the
-            // bracket itself.
             syncKnockoutResults();
-
-            // Recompute & re-render standings
             renderGroupStage();
             renderBracket();
-
             checkMissedScores(matchesData);
-
-            // Push the update to the cloud (no-op if sync isn't set up)
             saveToCloud();
 
-            // Flash confirmation
             const el = document.getElementById("save-status");
             el.classList.add("show");
             setTimeout(() => el.classList.remove("show"), 2500);
@@ -1853,19 +1916,30 @@
 
             // ── R16, QF, SF, Final: propagate knockout winners ────────────────────
             const ko = JSON.parse(localStorage.getItem("wc2026_knockout")||"{}");
+            // REPLACE these two helper functions inside resolveSlots()
             const winner = (mId) => {
-                const km=ko[mId];
-                if(!km||km.h===null||km.a===null) return null;
-                if(km.h>km.a) return slots[`M${mId}_t1`]||null;
-                if(km.a>km.h) return slots[`M${mId}_t2`]||null;
-                return null; // draw → needs extra time, show TBD
+                const km = ko[mId];
+                if (!km || km.h === null || km.a === null) return null;
+                if (Number(km.h) > Number(km.a)) return slots[`M${mId}_t1`] || null;
+                if (Number(km.a) > Number(km.h)) return slots[`M${mId}_t2`] || null;
+                // If it's a draw, use penalty shootout score to find the winner
+                if (km.ph !== undefined && km.pa !== undefined && km.ph !== null && km.pa !== null) {
+                    if (Number(km.ph) > Number(km.pa)) return slots[`M${mId}_t1`] || null;
+                    if (Number(km.pa) > Number(km.ph)) return slots[`M${mId}_t2`] || null;
+                }
+                return null; 
             };
 
             const loser = (mId) => {
-                const km=ko[mId];
-                if(!km||km.h===null||km.a===null) return null;
-                if(km.h>km.a) return slots[`M${mId}_t2`]||null; // Home won -> Away lost
-                if(km.a>km.h) return slots[`M${mId}_t1`]||null; // Away won -> Home lost
+                const km = ko[mId];
+                if (!km || km.h === null || km.a === null) return null;
+                if (Number(km.h) > Number(km.a)) return slots[`M${mId}_t2`] || null; 
+                if (Number(km.a) > Number(km.h)) return slots[`M${mId}_t1`] || null; 
+                // If it's a draw, use penalty shootout score to find the loser
+                if (km.ph !== undefined && km.pa !== undefined && km.ph !== null && km.pa !== null) {
+                    if (Number(km.ph) > Number(km.pa)) return slots[`M${mId}_t2`] || null;
+                    if (Number(km.pa) > Number(km.ph)) return slots[`M${mId}_t1`] || null;
+                }
                 return null;
             };
 
@@ -1891,7 +1965,7 @@
         function renderBracket() {
             const container = document.getElementById('bracket-scaler');
             const slots = resolveSlots();
-            const isReal = (v) => v && !v.startsWith('W M') && !v.startsWith('L M');
+            const isReal = (v) => v && !v.startsWith('W M') && !v.startsWith('L M') && !v.includes('Group') && v !== 'TBD';
 
             // Load the score data from localStorage
             const koScores = JSON.parse(localStorage.getItem("wc2026_knockout") || "{}");
@@ -1904,21 +1978,92 @@
             const HDR_H    = 32;
             const FINAL_H  = 136;
             const THIRD_H  = 112;
-            const THIRD_GAP = 80;
+
+            // --- NEW: 48-Team Flag Color Dictionary ---
+            const countryColors = {
+                "Argentina": ["#74acdf", "#ffffff", "#74acdf"],
+                "Mexico": ["#006847", "#ffffff", "#ce1126"],
+                "South Korea": ["#ffffff", "#c60c30", "#003478"],
+                "Czech Republic": ["#11457e", "#d7141a", "#ffffff"],
+                "South Africa": ["#007749", "#ffb81c", "#001489"],
+                "Canada": ["#d80621", "#ffffff", "#d80621"],
+                "Bosnia": ["#002395", "#fee11a", "#002395"],
+                "Qatar": ["#8d1b3d", "#ffffff", "#8d1b3d"],
+                "Switzerland": ["#ff0000", "#ffffff", "#ff0000"],
+                "Brazil": ["#009c3b", "#ffdf00", "#009c3b"],
+                "Morocco": ["#c1272d", "#006233", "#c1272d"],
+                "Haiti": ["#00209f", "#d21034", "#00209f"],
+                "Scotland": ["#005eb8", "#ffffff", "#005eb8"],
+                "United States": ["#b31942", "#ffffff", "#0a3161"],
+                "Paraguay": ["#d52b1e", "#ffffff", "#0038a8"],
+                "Australia": ["#00008b", "#ffffff", "#ff0000"],
+                "Türkiye": ["#e30a17", "#ffffff", "#e30a17"],
+                "Germany": ["#333333", "#dd0000", "#ffcc00"], // 333 instead of pure black for dark theme visibility
+                "Curaçao": ["#002b7f", "#f9e814", "#002b7f"],
+                "Ivory Coast": ["#f77f00", "#ffffff", "#009e60"],
+                "Ecuador": ["#ffdd00", "#034ea2", "#ed1c24"],
+                "Netherlands": ["#ae1c28", "#ffffff", "#21468b"],
+                "Japan": ["#ffffff", "#bc002d", "#ffffff"],
+                "Sweden": ["#004b87", "#ffcd00", "#004b87"],
+                "Tunisia": ["#e70013", "#ffffff", "#e70013"],
+                "Belgium": ["#333333", "#fdce12", "#ef3340"],
+                "Egypt": ["#ce1126", "#ffffff", "#333333"],
+                "Iran": ["#239f40", "#ffffff", "#da0000"],
+                "New Zealand": ["#00247d", "#ffffff", "#cc142b"],
+                "Spain": ["#aa151b", "#f1bf00", "#aa151b"],
+                "Cabo Verde": ["#003893", "#ffffff", "#cf2027"],
+                "Saudi Arabia": ["#006c35", "#ffffff", "#006c35"],
+                "Uruguay": ["#0038a8", "#ffffff", "#0038a8"],
+                "France": ["#002654", "#ffffff", "#ed2939"],
+                "Senegal": ["#00853f", "#fdef42", "#e31b23"],
+                "Iraq": ["#ce1126", "#ffffff", "#333333"],
+                "Norway": ["#ba0c2f", "#ffffff", "#00205b"],
+                "Algeria": ["#006233", "#ffffff", "#d21034"],
+                "Austria": ["#ed2939", "#ffffff", "#ed2939"],
+                "Jordan": ["#333333", "#ffffff", "#007a3d"],
+                "Portugal": ["#046a38", "#da291c", "#046a38"],
+                "DR Congo": ["#007fff", "#f7d618", "#ce1021"],
+                "Uzbekistan": ["#0099b5", "#ffffff", "#1eb53a"],
+                "Colombia": ["#fcd116", "#003893", "#ce1126"],
+                "England": ["#ffffff", "#ce1126", "#ffffff"],
+                "Croatia": ["#ff0000", "#ffffff", "#0000ff"],
+                "Ghana": ["#ce1126", "#fcd116", "#006b3f"],
+                "Panama": ["#005293", "#ffffff", "#d21034"]
+            };
+
+            // --- NEW: Dynamic Style Generator ---
+            function getGlowStyle(teamName, isWinner, isGoldFinal) {
+                if (!isReal(teamName)) return "";
+
+                const colors = countryColors[teamName] || ["#0d9488", "#ffffff", "#0d9488"];
+                
+                if (isWinner) {
+                    // Winner gets 25% opacity background gradient and 50% opacity box-shadow glow
+                    const grad = colors.map(c => c + '40').join(', '); 
+                    const glow = colors[0] + '80'; 
+                    
+                    // If they won the whole tournament, give them a golden box shadow, but keep their country flag background!
+                    if (isGoldFinal) {
+                        return `border-color: #fbbf24; background: linear-gradient(90deg, ${grad}); box-shadow: 0 0 16px rgba(251,191,36,0.8); color: #fbbf24; font-weight: 800;`;
+                    }
+                    return `border-color: ${colors[0]}; background: linear-gradient(90deg, ${grad}); box-shadow: 0 0 12px ${glow}; color: #ffffff; font-weight: 700;`;
+                } else {
+                    // Known teams waiting to play get a faint 10% opacity country gradient
+                    const grad = colors.map(c => c + '1A').join(', '); 
+                    return `border-color: ${colors[0]}66; background: linear-gradient(90deg, ${grad}); color: #e2e8f0;`;
+                }
+            }
 
             function getMatchTimeStr(id) {
                 const m = matchesData.find(x => x.id === id);
                 if (!m) return '';
-                // Converts "2026-06-28" to "6/28" and strips " PDT"
                 const parts = m.dateISO.split('-');
                 return parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10) + ' • ' + m.timePST.replace(' PDT', '');
             }
 
             function spread(n) {
                 const slot = TREE_H / n;
-                return Array.from({length: n}, (_, i) =>
-                    Math.round(slot * i + slot / 2 - BOX_H / 2)
-                );
+                return Array.from({length: n}, (_, i) => Math.round(slot * i + slot / 2 - BOX_H / 2));
             }
             function midpoints(prev) {
                 const out = [];
@@ -1937,32 +2082,22 @@
 
             const sfC1    = pSF[0] + BOX_H / 2;
             const sfC2    = pSF[1] + BOX_H / 2;
-            const finalCY = (sfC1 + sfC2) / 2;
-            /* Center the Final relative to the total height of the tree (1440px) */
             const finalTop = Math.round((TREE_H / 2) - (FINAL_H / 2)); 
-
-            /* Force the 3rd place box to sit exactly 120 pixels below the Final */
             const thirdTop = finalTop + FINAL_H + 120;
             const totalH    = Math.max(TREE_H, thirdTop + THIRD_H + 20);
 
             const LABELS = {r32:'Round of 32', r16:'Round of 16', qf:'Quarter-Finals', sf:'Semi-Finals'};
 
-            // Helper function to safely get score markup
             function getScoreSpan(matchId, side) {
                 const matchData = koScores[matchId];
                 if (!matchData || matchData.h === null || matchData.a === null) return '';
-                
-                // Get base scores
                 let score = side === 'home' ? matchData.h : matchData.a;
                 let penaltyText = '';
-
-                // If match went to penalties, format it nicely (e.g., "1 (4)")
-                if (matchData.h === matchData.a && matchData.ph !== undefined && matchData.pa !== undefined) {
+                if (Number(matchData.h) === Number(matchData.a) && matchData.ph !== undefined && matchData.pa !== undefined && matchData.ph !== null) {
                     const pens = side === 'home' ? matchData.ph : matchData.pa;
-                    penaltyText = `<span style="font-size:10px; opacity:0.6; margin-left:2px">(${pens})</span>`;
+                    penaltyText = `<span style="font-size:10px; opacity:0.8; margin-left:4px; color:#fbbf24;">(${pens})</span>`;
                 }
-
-                return `<span class="slot-score" style="margin-left: auto; font-weight: bold; background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; display: flex; align-items: center;">${score}${penaltyText}</span>`;
+                return `<span class="slot-score" style="margin-left: auto; font-weight: bold; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; display: flex; align-items: center;">${score}${penaltyText}</span>`;
             }
 
             function makeCol(ids, roundKey, positions) {
@@ -1971,69 +2106,71 @@
                     const t1 = slots['M' + id + '_t1'] || staticLabels['M' + id + '_t1'] || 'TBD';
                     const t2 = slots['M' + id + '_t2'] || staticLabels['M' + id + '_t2'] || 'TBD';
                     
-                    const k1 = isReal(slots['M' + id + '_t1']) ? ' team-known' : '';
-                    const k2 = isReal(slots['M' + id + '_t2']) ? ' team-known' : '';
+                    const k1 = isReal(t1) ? ' team-known' : '';
+                    const k2 = isReal(t2) ? ' team-known' : '';
 
-                    // Check who won this specific match to apply standard text highlights if desired
-                    let wClass1 = '', wClass2 = '';
+                    let isWinner1 = false, isWinner2 = false;
                     const m = koScores[id];
                     if (m && m.h !== null && m.a !== null) {
-                        if (m.h > m.a || (m.h === m.a && m.ph > m.pa)) wClass1 = ' winner-highlight';
-                        if (m.a > m.h || (m.h === m.a && m.pa > m.ph)) wClass2 = ' winner-highlight';
+                        if (Number(m.h) > Number(m.a) || (Number(m.h) === Number(m.a) && Number(m.ph) > Number(m.pa))) isWinner1 = true;
+                        if (Number(m.a) > Number(m.h) || (Number(m.h) === Number(m.a) && Number(m.pa) > Number(m.ph))) isWinner2 = true;
                     }
+
+                    // Generate custom country styles
+                    const style1 = getGlowStyle(t1, isWinner1, false);
+                    const style2 = getGlowStyle(t2, isWinner2, false);
 
                     const dtStr = getMatchTimeStr(id);
 
                     boxes += '<div class="match-box" style="top:' + positions[i] + 'px">'
-                           + '<div class="match-id" style="display:flex; justify-content:space-between; align-items:center;">'
-                           + '  <span>M' + id + '</span>'
-                           + '  <span style="font-size:11px; color:#94a3b8; font-weight:600;">' + dtStr + '</span>'
-                           + '</div>'
-                           + '<div class="team-slot' + k1 + wClass1 + '" style="display:flex; align-items:center; width:100%; justify-content: space-between;">'
-                           + '  <div style="display:flex; align-items:center; gap:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + getFlag(t1) + t1 + '</div>'
-                           +    getScoreSpan(id, 'home')
-                           + '</div>'
-                           + '<div class="team-slot' + k2 + wClass2 + '" style="display:flex; align-items:center; width:100%; justify-content: space-between;">'
-                           + '  <div style="display:flex; align-items:center; gap:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + getFlag(t2) + t2 + '</div>'
-                           +    getScoreSpan(id, 'away')
-                           + '</div>'
-                           + '</div>';
+                        + '<div class="match-id" style="display:flex; justify-content:space-between; align-items:center;">'
+                        + '  <span>M' + id + '</span>'
+                        + '  <span style="font-size:11px; color:#94a3b8; font-weight:600;">' + dtStr + '</span>'
+                        + '</div>'
+                        + '<div class="team-slot' + k1 + '" style="display:flex; align-items:center; width:100%; justify-content: space-between; ' + style1 + '">'
+                        + '  <div style="display:flex; align-items:center; gap:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + getFlag(t1) + t1 + '</div>'
+                        +    getScoreSpan(id, 'home')
+                        + '</div>'
+                        + '<div class="team-slot' + k2 + '" style="display:flex; align-items:center; width:100%; justify-content: space-between; ' + style2 + '">'
+                        + '  <div style="display:flex; align-items:center; gap:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + getFlag(t2) + t2 + '</div>'
+                        +    getScoreSpan(id, 'away')
+                        + '</div>'
+                        + '</div>';
                 });
                 return '<div class="tree-col" style="width:' + COL_W + 'px">'
-                     + '<div class="col-header">' + LABELS[roundKey] + '</div>'
-                     + '<div class="col-body" style="height:' + totalH + 'px">' + boxes + '</div>'
-                     + '</div>';
+                    + '<div class="col-header">' + LABELS[roundKey] + '</div>'
+                    + '<div class="col-body" style="height:' + totalH + 'px">' + boxes + '</div>'
+                    + '</div>';
             }
 
             const f1  = slots['M104_t1'] || 'TBD';
             const f2  = slots['M104_t2'] || 'TBD';
-            
-            let fk1 = isReal(slots['M104_t1']) ? ' team-known' : '';
-            let fk2 = isReal(slots['M104_t2']) ? ' team-known' : '';
+            let fk1 = isReal(f1) ? ' team-known' : '';
+            let fk2 = isReal(f2) ? ' team-known' : '';
 
-            // --- GOLD HIGHLIGHT LOGIC FOR FINAL ---
+            let isGold1 = false, isGold2 = false;
             const finalMatch = koScores[104];
             if (finalMatch && finalMatch.h !== null && finalMatch.a !== null) {
-                if (finalMatch.h > finalMatch.a || (finalMatch.h === finalMatch.a && finalMatch.ph > finalMatch.pa)) {
-                    fk1 += " winner-gold";
-                } else if (finalMatch.a > finalMatch.h || (finalMatch.h === finalMatch.a && finalMatch.pa > finalMatch.ph)) {
-                    fk2 += " winner-gold";
-                }
+                if (Number(finalMatch.h) > Number(finalMatch.a) || (Number(finalMatch.h) === Number(finalMatch.a) && Number(finalMatch.ph) > Number(finalMatch.pa))) isGold1 = true;
+                if (Number(finalMatch.a) > Number(finalMatch.h) || (Number(finalMatch.h) === Number(finalMatch.a) && Number(finalMatch.pa) > Number(finalMatch.ph))) isGold2 = true;
             }
 
-            // Pull M103 teams from slots, fallback to L M101/M102 if not resolved yet
+            const styleF1 = getGlowStyle(f1, isGold1, isGold1);
+            const styleF2 = getGlowStyle(f2, isGold2, isGold2);
+
             const t3a = slots['M103_t1'] || (slots['M101_t1'] ? 'L M101' : 'TBD');
             const t3b = slots['M103_t2'] || (slots['M102_t1'] ? 'L M102' : 'TBD');
-            const kt3a = isReal(slots['M103_t1']) ? ' team-known' : '';
-            const kt3b = isReal(slots['M103_t2']) ? ' team-known' : '';
+            const kt3a = isReal(t3a) ? ' team-known' : '';
+            const kt3b = isReal(t3b) ? ' team-known' : '';
 
-            // Check third place match winner highlight
-            let tk3a = '', tk3b = '';
+            let isWinner3a = false, isWinner3b = false;
             const thirdMatch = koScores[103];
             if (thirdMatch && thirdMatch.h !== null && thirdMatch.a !== null) {
-                if (thirdMatch.h > thirdMatch.a || (thirdMatch.h === thirdMatch.a && thirdMatch.ph > thirdMatch.pa)) tk3a = ' winner-highlight';
-                if (thirdMatch.a > thirdMatch.h || (thirdMatch.h === thirdMatch.a && thirdMatch.pa > thirdMatch.ph)) tk3b = ' winner-highlight';
+                if (Number(thirdMatch.h) > Number(thirdMatch.a) || (Number(thirdMatch.h) === Number(thirdMatch.a) && Number(thirdMatch.ph) > Number(thirdMatch.pa))) isWinner3a = true;
+                if (Number(thirdMatch.a) > Number(thirdMatch.h) || (Number(thirdMatch.h) === Number(thirdMatch.a) && Number(thirdMatch.pa) > Number(thirdMatch.ph))) isWinner3b = true;
             }
+            const style3a = getGlowStyle(t3a, isWinner3a, false);
+            const style3b = getGlowStyle(t3b, isWinner3b, false);
 
             const dtFinal = getMatchTimeStr(104);
             const dtThird = getMatchTimeStr(103);
@@ -2043,20 +2180,20 @@
                 + '<div class="center-body" style="height:' + totalH + 'px">'
                 + '<div class="final-box" style="top:' + finalTop + 'px">'
                 + '<div class="col-header">&#x26BD; Final &mdash; M104</div>'
-                + '<div class="team-slot' + fk1 + '" style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
+                + '<div class="team-slot' + fk1 + '" style="display:flex;align-items:center;justify-content:space-between;gap:6px; ' + styleF1 + '">'
                 + '  <div style="display:flex;align-items:center;gap:6px">' + getFlag(f1) + f1 + '</div>' + getScoreSpan(104, 'home')
                 + '</div>'
-                + '<div class="team-slot' + fk2 + '" style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
+                + '<div class="team-slot' + fk2 + '" style="display:flex;align-items:center;justify-content:space-between;gap:6px; ' + styleF2 + '">'
                 + '  <div style="display:flex;align-items:center;gap:6px">' + getFlag(f2) + f2 + '</div>' + getScoreSpan(104, 'away')
                 + '</div>'
                 + '<div style="text-align:center; font-size:12px; color:#fcd34d; font-weight:600; margin-top:8px;">' + dtFinal + '</div>'
                 + '</div>'
                 + '<div class="third-box" style="top:' + thirdTop + 'px">'
                 + '<div class="col-header">&#x1F949; Third Place &mdash; M103</div>'
-                + '<div class="team-slot' + kt3a + tk3a + '" style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
+                + '<div class="team-slot' + kt3a + '" style="display:flex;align-items:center;justify-content:space-between;gap:6px; ' + style3a + '">'
                 + '  <div style="display:flex;align-items:center;gap:6px">' + getFlag(t3a) + t3a + '</div>' + getScoreSpan(103, 'home')
                 + '</div>'
-                + '<div class="team-slot' + kt3b + tk3b + '" style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
+                + '<div class="team-slot' + kt3b + '" style="display:flex;align-items:center;justify-content:space-between;gap:6px; ' + style3b + '">'
                 + '  <div style="display:flex;align-items:center;gap:6px">' + getFlag(t3b) + t3b + '</div>' + getScoreSpan(103, 'away')
                 + '</div>'
                 + '<div style="text-align:center; font-size:11px; color:#94a3b8; font-weight:600; margin-top:8px;">' + dtThird + '</div>'
