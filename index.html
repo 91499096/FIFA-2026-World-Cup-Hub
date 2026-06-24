@@ -1380,6 +1380,8 @@
             const existingCode = localStorage.getItem('sync_code');
             if (existingCode) {
                 document.getElementById('current-code-display').innerText = `Code: ${existingCode}`;
+                document.getElementById('sync-code-input').value = existingCode;
+                autoLoadFromCloud();
             }
         });
 
@@ -1967,21 +1969,19 @@
             const slots = resolveSlots();
             const isReal = (v) => v && !v.startsWith('W M') && !v.startsWith('L M') && !v.includes('Group') && v !== 'TBD';
 
-            // Load the score data from localStorage
             const koScores = JSON.parse(localStorage.getItem("wc2026_knockout") || "{}");
 
-            // All sizes hardcoded — nothing reads from DOM before render
             const COL_W    = 200;
             const CTR_W    = 260;
             
-            // --- UPDATED MATH: Compensating for Header Text ---
             const BOX_H    = 116;  
             const FINAL_H  = 160;  
-            const boxHalf  = 58;      // Exactly half of BOX_H
+            const boxHalf  = 58;      
             
-            const TREE_H   = 1440;
+            // --- UPDATED MATH: Tighter overall layout so it naturally fits screens better ---
+            const TREE_H   = 1120;    // Shrunk from 1440
             const HDR_H    = 32;
-            const HEADER_OFFSET = 34; // The pixel height of the "Round of X" text pushing the boxes down
+            const HEADER_OFFSET = 34; 
             const THIRD_H  = 112;
             const GAP      = 40; 
 
@@ -2079,7 +2079,7 @@
             const sfC1    = pSF[0] + BOX_H / 2;
             const sfC2    = pSF[1] + BOX_H / 2;
             const finalTop = Math.round((TREE_H / 2) - (FINAL_H / 2)); 
-            const thirdTop = finalTop + FINAL_H + 120;
+            const thirdTop = finalTop + FINAL_H + 80; // Decreased gap so bracket doesn't extend unnecessarily
             const totalH    = Math.max(TREE_H, thirdTop + THIRD_H + 20);
 
             const LABELS = {r32:'Round of 32', r16:'Round of 16', qf:'Quarter-Finals', sf:'Semi-Finals'};
@@ -2134,13 +2134,11 @@
             const rqfPos  = [...pQF].reverse();
             const rsfPos  = [...pSF].reverse();
 
-            // Draw Left SVG lines
             for(let i=0; i<8; i++) drawLine(cX[0]+COL_W, p32[i]+boxHalf, cX[1], p16[Math.floor(i/2)]+boxHalf, r32LeftIds[i]);
             for(let i=0; i<4; i++) drawLine(cX[1]+COL_W, p16[i]+boxHalf, cX[2], pQF[Math.floor(i/2)]+boxHalf, r16LeftIds[i]);
             for(let i=0; i<2; i++) drawLine(cX[2]+COL_W, pQF[i]+boxHalf, cX[3], pSF[Math.floor(i/2)]+boxHalf, qfLeftIds[i]);
             for(let i=0; i<1; i++) drawLine(cX[3]+COL_W, pSF[i]+boxHalf, cX[4]+8, finalTop + FINAL_H/2, sfLeftIds[i]);
 
-            // Draw Right SVG lines
             for(let i=0; i<8; i++) drawLine(cX[8], r32rPos[i]+boxHalf, cX[7]+COL_W, r16rPos[Math.floor(i/2)]+boxHalf, r32RightIds[i]);
             for(let i=0; i<4; i++) drawLine(cX[7], r16rPos[i]+boxHalf, cX[6]+COL_W, rqfPos[Math.floor(i/2)]+boxHalf, r16RightIds[i]);
             for(let i=0; i<2; i++) drawLine(cX[6], rqfPos[i]+boxHalf, cX[5]+COL_W, rsfPos[Math.floor(i/2)]+boxHalf, qfRightIds[i]);
@@ -2248,7 +2246,6 @@
             const r16r = [].concat(p16).reverse();
             const r32r = [].concat(p32).reverse();
 
-            // --- UPDATED: SVG position pushed down by HEADER_OFFSET ---
             container.innerHTML = '<div class="fifa-tree" style="padding-top:' + HDR_H + 'px; gap: ' + GAP + 'px; position: relative;">'
                 + '<svg style="position: absolute; top: ' + (HDR_H + HEADER_OFFSET) + 'px; left: 0; width: 2180px; height: ' + totalH + 'px; pointer-events: none; z-index: 0;">'
                 + svgPaths
@@ -2418,6 +2415,45 @@
                 window.location.reload(); // Refresh the page to render the freshly downloaded data
             } catch (err) {
                 alert("Error: Code not found or has no cloud data yet.");
+            }
+        }
+
+        // 4. AUTO-LOAD ON PAGE REFRESH (Silent Sync)
+        async function autoLoadFromCloud() {
+            const code = localStorage.getItem('sync_code');
+            if (!code || !isSupabaseConfigured()) return;
+
+            try {
+                const response = await fetch(
+                    `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?code=eq.${encodeURIComponent(code)}&select=data`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                if (!response.ok) throw new Error("Request failed");
+
+                const rows = await response.json();
+                if (!rows.length) return; // No cloud data found, just continue normally
+
+                // Silently apply cloud data to local storage
+                applyCloudData(rows[0].data);
+                
+                // Reload memory variables with the fresh data
+                matchesData = loadMatches();
+                
+                // Re-render the UI quietly without triggering a page reload
+                filterMatches();
+                renderGroupStage();
+                renderBracket();
+                scaleBracket();
+                checkMissedScores(matchesData);
+                
+                console.log(`Auto-synced successfully with code: ${code}`);
+            } catch (err) {
+                console.error("Auto-sync background fetch failed:", err);
             }
         }
 
