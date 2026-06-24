@@ -1396,6 +1396,16 @@
                     document.getElementById(link.dataset.target).classList.add("active");
                 });
             });
+
+            // NEW: Check memory to see if we should switch tabs on load
+            const savedTab = localStorage.getItem("wc2026_active_tab");
+            if (savedTab) {
+                const targetLink = document.querySelector(`.nav-link[data-target="${savedTab}"]`);
+                if (targetLink) {
+                    // Programmatically click the saved tab to open it instantly
+                    targetLink.click(); 
+                }
+            }
         }
 
         function renderGroupStage() {
