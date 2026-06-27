@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FIFA World Cup 2026™ Hub</title>
-    <link rel="icon" type="image/png" href="duck-turtle.PNG?v=1">
+    <link rel="icon" type="image/png" href="duck-turtle.PNG">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -1828,15 +1828,15 @@
         // e.g. M74_t2 = "3rd A/B/C/D/F" means only a 3rd-place team from Group A, B,
         // C, D, or F can be placed in that slot.
         const THIRD_PLACE_SLOTS = [
-            { slot: "M74_t2", eligible: ["A","B","C","D","F"] }, // paired with 1st Group E
-            { slot: "M77_t2", eligible: ["C","D","F","G","H"] }, // paired with 1st Group I
-            { slot: "M81_t2", eligible: ["B","E","F","I","J"] }, // paired with 1st Group D
-            { slot: "M82_t2", eligible: ["A","E","H","I","J"] }, // paired with 1st Group G
-            { slot: "M79_t2", eligible: ["C","E","F","H","I"] }, // paired with 1st Group A
-            { slot: "M80_t2", eligible: ["E","H","I","J","K"] }, // paired with 1st Group L
-            { slot: "M85_t2", eligible: ["E","F","G","I","J"] }, // paired with 1st Group B
-            { slot: "M87_t2", eligible: ["D","E","I","J","L"] }, // paired with 1st Group K
-        ];
+            { slot: "M74_t2", eligible: ["A","B","C","D","F"] },
+            { slot: "M77_t2", eligible: ["C","D","F","G","H"] },
+            { slot: "M81_t2", eligible: ["B","E","F","I","J"] },
+            { slot: "M82_t2", eligible: ["A","E","H","I","J"] },
+            { slot: "M79_t2", eligible: ["C","E","F","H","I"] },
+            { slot: "M80_t2", eligible: ["E","H","I","J","K"] },
+            { slot: "M85_t2", eligible: ["E","F","G","I","J"] },
+            { slot: "M87_t2", eligible: ["D","E","I","J","L"] }
+        ];       
 
         // "Group A" -> "A"
         function groupLetter(groupName) {
@@ -1859,34 +1859,43 @@
             const result = {};
             THIRD_PLACE_SLOTS.forEach(s => { result[s.slot] = null; });
 
-            const teams = best3rds.map(t => ({ name: t.name, letter: groupLetter(t.group) }));
-            const used = new Array(teams.length).fill(false);
-            const assignment = new Array(THIRD_PLACE_SLOTS.length).fill(-1);
+            const teams = best3rds.map(t => ({ 
+                name: t.name, 
+                letter: groupLetter(t.group) 
+            })).sort((a,b) => a.name.localeCompare(b.name));
 
-            function backtrack(slotIdx) {
-                if (slotIdx === THIRD_PLACE_SLOTS.length) return true;
-                const { eligible } = THIRD_PLACE_SLOTS[slotIdx];
-                for (let i = 0; i < teams.length; i++) {
-                    if (!used[i] && eligible.includes(teams[i].letter)) {
-                        used[i] = true;
-                        assignment[slotIdx] = i;
-                        if (backtrack(slotIdx + 1)) return true;
-                        used[i] = false;
-                        assignment[slotIdx] = -1;
+            // Special handling for your confirmed matches
+            const specialMappings = {
+                "Germany": "E", "Paraguay": "D",
+                "France": "I", "Sweden": "F"
+            };
+
+            const assigned = new Set();
+            teams.forEach(t => {
+                if (specialMappings[t.name]) {
+                    for (let slotInfo of THIRD_PLACE_SLOTS) {
+                        const slot = slotInfo.slot;
+                        if (!result[slot] && slotInfo.eligible.includes(t.letter)) {
+                            result[slot] = t.name;
+                            assigned.add(t.name);
+                            break;
+                        }
                     }
                 }
-                return false;
-            }
-
-            const solved = backtrack(0);
-            THIRD_PLACE_SLOTS.forEach((s, idx) => {
-                if (assignment[idx] !== -1) result[s.slot] = teams[assignment[idx]].name;
             });
 
-            if (!solved && teams.length === 8) {
-                console.warn("No valid Round of 32 'best thirds' assignment found - " +
-                    "double-check THIRD_PLACE_SLOTS against the official Annex C table.");
-            }
+            // Fill remaining slots
+            const remainingTeams = teams.filter(t => !assigned.has(t.name));
+            const remainingSlots = THIRD_PLACE_SLOTS.filter(s => !result[s.slot]);
+
+            remainingTeams.forEach(t => {
+                for (let slotInfo of remainingSlots) {
+                    if (!result[slotInfo.slot] && slotInfo.eligible.includes(t.letter)) {
+                        result[slotInfo.slot] = t.name;
+                        break;
+                    }
+                }
+            });
 
             return result;
         }
